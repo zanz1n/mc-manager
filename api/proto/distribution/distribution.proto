@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package distribution;
+
+option go_package = "./distropb";
+
+message Version {
+  string id = 1;
+  Distribution distribution = 2;
+  string url = 3;
+  HashType hash_type = 4;
+  string hash = 5;
+  JavaVersion java_version = 6;
+}
+
+enum Distribution {
+  PAPER = 0;
+  VANILLA = 1;
+}
+
+enum HashType {
+  HASH_NONE = 0;
+  SHA1 = 1;
+  SHA256 = 2;
+  SHA512 = 3;
+  SHA224 = 4;
+  SHA384 = 5;
+}
+
+enum JavaVersion {
+  JAVA_UNKNOWN = 0;
+  JAVA8 = 8;
+  JAVA11 = 11;
+  JAVA17 = 17;
+  JAVA21 = 21;
+  JAVA24 = 24;
+}
+
+message GetLatestRequest {
+  Distribution distribution = 1;
+}
+
+message GetVersionRequest {
+  Distribution distribution = 1;
+  string version_id = 2;
+}
+
+message GetAllRequest {
+  Distribution distribution = 1;
+}
+
+message GetAllResponse {
+  repeated string versions = 1;
+}
+
+service DistributionService {
+  rpc GetLatest(GetLatestRequest) returns (Version);
+
+  rpc GetVersion(GetVersionRequest) returns (Version);
+
+  rpc GetAll(GetAllRequest) returns (GetAllResponse);
+}
