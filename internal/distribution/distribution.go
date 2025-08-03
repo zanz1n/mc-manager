@@ -24,12 +24,13 @@ type Distribution interface {
 }
 
 type Version struct {
-	ID           string
-	URL          string
-	Hash         []byte
-	HashType     distropb.HashType
-	Distribution distropb.Distribution
-	JavaVersion  distropb.JavaVersion
+	ID           string                `json:"id"`
+	URL          string                `json:"url"`
+	Hash         []byte                `json:"hash"`
+	JVMArgs      []string              `json:"jvm_args"`
+	HashType     distropb.HashType     `json:"hash_type"`
+	Distribution distropb.Distribution `json:"distribution"`
+	JavaVersion  distropb.JavaVersion  `json:"java_version"`
 }
 
 // The returned hash can be nil in case the hash is not available.

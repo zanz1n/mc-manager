@@ -19,9 +19,9 @@ type paperVersion struct {
 	Version struct {
 		ID   string `json:"id" validate:"required"`
 		Java struct {
-			// Flags struct {
-			// 	Recomended []string `json:"recommended"`
-			// } `json:"flags"`
+			Flags struct {
+				Recomended []string `json:"recommended"`
+			} `json:"flags"`
 			Version struct {
 				Minimum uint8 `json:"minimum" validate:"required"`
 			} `json:"version"`
@@ -43,7 +43,7 @@ type paperBuildDownload struct {
 	} `json:"checksums"`
 }
 
-type Paper struct {
+type paper struct {
 	c *http.Client
 }
 
@@ -52,11 +52,11 @@ func NewPaper(c *http.Client) Distribution {
 		c = http.DefaultClient
 	}
 
-	return &Paper{c: c}
+	return &paper{c: c}
 }
 
 // GetLatest implements Distribution.
-func (d *Paper) GetLatest(ctx context.Context) (Version, error) {
+func (d *paper) GetLatest(ctx context.Context) (Version, error) {
 	var data paperManifest
 
 	err := getreq(
@@ -78,7 +78,7 @@ func (d *Paper) GetLatest(ctx context.Context) (Version, error) {
 }
 
 // GetVersion implements Distribution.
-func (d *Paper) GetVersion(ctx context.Context, semver string) (Version, error) {
+func (d *paper) GetVersion(ctx context.Context, semver string) (Version, error) {
 	fetchUrl := fmt.Sprintf(
 		"https://fill.papermc.io/v3/projects/paper/versions/%s",
 		semver,
@@ -114,7 +114,7 @@ func (d *Paper) GetVersion(ctx context.Context, semver string) (Version, error) 
 }
 
 // GetAll implements Distribution.
-func (d *Paper) GetAll(ctx context.Context) ([]string, error) {
+func (d *paper) GetAll(ctx context.Context) ([]string, error) {
 	var data paperManifest
 
 	err := getreq(
@@ -135,7 +135,7 @@ func (d *Paper) GetAll(ctx context.Context) ([]string, error) {
 	return res, nil
 }
 
-func (d *Paper) getVersion(ctx context.Context, version paperVersion) (Version, error) {
+func (d *paper) getVersion(ctx context.Context, version paperVersion) (Version, error) {
 	fetchUrl := fmt.Sprintf(
 		"https://fill.papermc.io/v3/projects/paper/versions/%s/builds/latest",
 		version.Version.ID,
@@ -171,6 +171,7 @@ func (d *Paper) getVersion(ctx context.Context, version paperVersion) (Version, 
 		ID:           version.Version.ID,
 		URL:          download.URL,
 		Hash:         hash,
+		JVMArgs:      version.Version.Java.Flags.Recomended,
 		HashType:     htype,
 		Distribution: distropb.Distribution_PAPER,
 		JavaVersion:  javaVersion,

@@ -42,7 +42,7 @@ type vanillaVersion struct {
 	} `json:"javaVersion"`
 }
 
-type Vanilla struct {
+type vanilla struct {
 	c *http.Client
 }
 
@@ -51,11 +51,11 @@ func NewVanilla(c *http.Client) Distribution {
 		c = http.DefaultClient
 	}
 
-	return &Vanilla{c: c}
+	return &vanilla{c: c}
 }
 
 // GetLatest implements Distribution.
-func (d *Vanilla) GetLatest(ctx context.Context) (Version, error) {
+func (d *vanilla) GetLatest(ctx context.Context) (Version, error) {
 	data, err := d.getManifest(ctx)
 	if err != nil {
 		return Version{}, err
@@ -78,7 +78,7 @@ func (d *Vanilla) GetLatest(ctx context.Context) (Version, error) {
 }
 
 // GetLatestSubver implements Distribution.
-func (d *Vanilla) GetVersion(ctx context.Context, semver string) (Version, error) {
+func (d *vanilla) GetVersion(ctx context.Context, semver string) (Version, error) {
 	data, err := d.getManifest(ctx)
 	if err != nil {
 		return Version{}, err
@@ -101,7 +101,7 @@ func (d *Vanilla) GetVersion(ctx context.Context, semver string) (Version, error
 }
 
 // GetAll implements Distribution.
-func (d *Vanilla) GetAll(ctx context.Context) ([]string, error) {
+func (d *vanilla) GetAll(ctx context.Context) ([]string, error) {
 	data, err := d.getManifest(ctx)
 	if err != nil {
 		return nil, err
@@ -114,7 +114,7 @@ func (d *Vanilla) GetAll(ctx context.Context) ([]string, error) {
 	return res, nil
 }
 
-func (d *Vanilla) getManifest(ctx context.Context) (vanillaManifest, error) {
+func (d *vanilla) getManifest(ctx context.Context) (vanillaManifest, error) {
 	var data vanillaManifest
 
 	err := getreq(
@@ -130,7 +130,7 @@ func (d *Vanilla) getManifest(ctx context.Context) (vanillaManifest, error) {
 	return data, err
 }
 
-func (d *Vanilla) getVersion(
+func (d *vanilla) getVersion(
 	ctx context.Context,
 	version vanillaManifestVersion,
 ) (Version, error) {
