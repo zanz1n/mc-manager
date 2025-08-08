@@ -6,7 +6,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/zanz1n/mc-manager/internal/pb/distropb"
+	"github.com/zanz1n/mc-manager/internal/pb"
 )
 
 type vanillaManifest struct {
@@ -142,10 +142,10 @@ func (d *vanilla) getVersion(
 	}
 	javaVersion := normalizeJavaLts(data.JavaVersion.MajorVersion)
 
-	htype := distropb.HashType_SHA1
+	htype := pb.HashType_SHA1
 	hash, err := hex.DecodeString(data.Downloads.Server.SHA1)
 	if err != nil {
-		htype, hash = distropb.HashType_HASH_NONE, nil
+		htype, hash = pb.HashType_HASH_NONE, nil
 	}
 
 	return Version{
@@ -153,7 +153,7 @@ func (d *vanilla) getVersion(
 		URL:          data.Downloads.Server.URL,
 		Hash:         hash,
 		HashType:     htype,
-		Distribution: distropb.Distribution_VANILLA,
+		Distribution: pb.Distribution_VANILLA,
 		JavaVersion:  javaVersion,
 	}, nil
 }

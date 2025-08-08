@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package distribution;
+package manager;
 
-option go_package = "./distropb";
+option go_package = "./pb";
 
 message Version {
   string id = 1;

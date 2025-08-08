@@ -8,7 +8,7 @@ import (
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/zanz1n/mc-manager/internal/pb/distropb"
+	"github.com/zanz1n/mc-manager/internal/pb"
 )
 
 var validate = validator.New()
@@ -33,22 +33,22 @@ func getreq(ctx context.Context, c *http.Client, url string, v any) error {
 	return validate.StructCtx(ctx, v)
 }
 
-func normalizeJavaLts(v uint8) distropb.JavaVersion {
+func normalizeJavaLts(v uint8) pb.JavaVersion {
 	switch {
 	case v <= 8:
-		return distropb.JavaVersion_JAVA8
+		return pb.JavaVersion_JAVA8
 	case v <= 11:
-		return distropb.JavaVersion_JAVA11
+		return pb.JavaVersion_JAVA11
 	case v <= 17:
-		return distropb.JavaVersion_JAVA17
+		return pb.JavaVersion_JAVA17
 	case v <= 21:
-		return distropb.JavaVersion_JAVA21
+		return pb.JavaVersion_JAVA21
 	// TODO: java 25 yet to be released
 	case v <= 24:
-		return distropb.JavaVersion_JAVA24
+		return pb.JavaVersion_JAVA24
 	}
 
-	return distropb.JavaVersion_JAVA8
+	return pb.JavaVersion_JAVA8
 }
 
 var _ io.Writer = (*hashWriter)(nil)

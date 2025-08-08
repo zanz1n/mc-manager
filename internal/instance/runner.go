@@ -18,7 +18,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/zanz1n/mc-manager/config"
-	"github.com/zanz1n/mc-manager/internal/pb/instancepb"
+	"github.com/zanz1n/mc-manager/internal/pb"
 )
 
 type Runner interface {
@@ -223,7 +223,7 @@ func (r *dockerRunner) Launch(ctx context.Context, instance *Instance) error {
 	}
 
 	instance.setStream(res)
-	instance.SetState(instancepb.InstanceState_STATE_STARTING)
+	instance.SetState(pb.InstanceState_STATE_STARTING)
 	instance.launch()
 
 	return nil
@@ -245,9 +245,9 @@ func (r *dockerRunner) Stop(ctx context.Context, instance *Instance) error {
 	}
 
 	instance.SendEvent(Event{
-		Type: instancepb.EventType_EVENT_SHUTTING_DOWN,
+		Type: pb.EventType_EVENT_SHUTTING_DOWN,
 	})
-	instance.SetState(instancepb.InstanceState_STATE_SHUTTING_DOWN)
+	instance.SetState(pb.InstanceState_STATE_SHUTTING_DOWN)
 
 	timeout := 20
 
@@ -259,9 +259,9 @@ func (r *dockerRunner) Stop(ctx context.Context, instance *Instance) error {
 		return errors.Join(ErrInstanceStop, err)
 	}
 
-	instance.SetState(instancepb.InstanceState_STATE_OFFLINE)
+	instance.SetState(pb.InstanceState_STATE_OFFLINE)
 	instance.SendEvent(Event{
-		Type: instancepb.EventType_EVENT_STOPPED,
+		Type: pb.EventType_EVENT_STOPPED,
 	})
 	instance.close()
 

@@ -10,7 +10,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/zanz1n/mc-manager/internal/distribution"
 	"github.com/zanz1n/mc-manager/internal/dto"
-	"github.com/zanz1n/mc-manager/internal/pb/instancepb"
+	"github.com/zanz1n/mc-manager/internal/pb"
 )
 
 const (
@@ -21,8 +21,8 @@ const (
 )
 
 type Event struct {
-	Type instancepb.EventType `json:"type"`
-	Data []byte               `json:"data"`
+	Type pb.EventType `json:"type"`
+	Data []byte       `json:"data"`
 }
 
 type InstanceLimits struct {
@@ -136,11 +136,11 @@ func (i *Instance) DetachListener(ch chan Event) bool {
 	return ok
 }
 
-func (i *Instance) GetState() instancepb.InstanceState {
-	return instancepb.InstanceState(i.state.Load())
+func (i *Instance) GetState() pb.InstanceState {
+	return pb.InstanceState(i.state.Load())
 }
 
-func (i *Instance) SetState(state instancepb.InstanceState) {
+func (i *Instance) SetState(state pb.InstanceState) {
 	i.state.Store(int32(state))
 }
 
@@ -177,7 +177,7 @@ func (i *Instance) backgroundLogs() {
 			break
 		}
 
-		i.SendEvent(Event{Type: instancepb.EventType_EVENT_LOG, Data: line})
+		i.SendEvent(Event{Type: pb.EventType_EVENT_LOG, Data: line})
 	}
 }
 
@@ -188,7 +188,7 @@ func (i *Instance) close() {
 	for ch, _ := range i.listeners {
 		counter := time.Tick(10 * time.Millisecond)
 		select {
-		case ch <- Event{Type: instancepb.EventType_EVENT_STOPPED}:
+		case ch <- Event{Type: pb.EventType_EVENT_STOPPED}:
 		case <-counter:
 		}
 		close(ch)

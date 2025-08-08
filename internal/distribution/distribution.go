@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/zanz1n/mc-manager/internal/pb/distropb"
+	"github.com/zanz1n/mc-manager/internal/pb"
 )
 
 type Distribution interface {
@@ -24,27 +24,27 @@ type Distribution interface {
 }
 
 type Version struct {
-	ID           string                `json:"id"`
-	URL          string                `json:"url"`
-	Hash         []byte                `json:"hash"`
-	JVMArgs      []string              `json:"jvm_args"`
-	HashType     distropb.HashType     `json:"hash_type"`
-	Distribution distropb.Distribution `json:"distribution"`
-	JavaVersion  distropb.JavaVersion  `json:"java_version"`
+	ID           string          `json:"id"`
+	URL          string          `json:"url"`
+	Hash         []byte          `json:"hash"`
+	JVMArgs      []string        `json:"jvm_args"`
+	HashType     pb.HashType     `json:"hash_type"`
+	Distribution pb.Distribution `json:"distribution"`
+	JavaVersion  pb.JavaVersion  `json:"java_version"`
 }
 
 // The returned hash can be nil in case the hash is not available.
 func (v *Version) CreateHash() (h hash.Hash) {
 	switch v.HashType {
-	case distropb.HashType_SHA1:
+	case pb.HashType_SHA1:
 		h = sha1.New()
-	case distropb.HashType_SHA256:
+	case pb.HashType_SHA256:
 		h = sha256.New()
-	case distropb.HashType_SHA224:
+	case pb.HashType_SHA224:
 		h = sha3.New224()
-	case distropb.HashType_SHA384:
+	case pb.HashType_SHA384:
 		h = sha3.New384()
-	case distropb.HashType_SHA512:
+	case pb.HashType_SHA512:
 		h = sha512.New()
 	}
 	return

@@ -1,11 +1,12 @@
 syntax = "proto3";
 
-package instance;
+package manager;
 
+import "distribution.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "./instancepb";
+option go_package = "./pb";
 
 message InstanceLimits {
   google.protobuf.Duration shutdown_after_idle = 1;
@@ -28,8 +29,7 @@ message InstanceConfig {
 message InstanceCreateData {
   fixed64 id = 1;
   string name = 2;
-  // json
-  string version = 3;
+  manager.Version version = 3;
   InstanceLimits limits = 4;
   InstanceConfig config = 5;
 }
@@ -48,8 +48,7 @@ message Instance {
   string name = 4;
   int32 players = 5;
   bool launched = 6;
-  // json
-  string version = 7;
+  manager.Version version = 7;
   InstanceLimits limits = 8;
   InstanceConfig config = 9;
   InstanceState state = 10;

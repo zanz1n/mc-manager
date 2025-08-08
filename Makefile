@@ -127,18 +127,18 @@ $(PROTOC):
 	rm -f $(PROTOC).zip
 
 proto-generate: $(PROTOC) deps
-	rm -f internal/pb/**/*pb.go
+	rm -f internal/pb/*pb.go
 
 	$(PROTOC)/bin/protoc $(PROTOC_INCLUDE) \
-	--go_out=./internal/pb --go_opt=paths=import \
-	--go-grpc_out=./internal/pb --go-grpc_opt=paths=import \
-	./api/proto/*/*.proto
+	--go_out=./internal/pb --go_opt=paths=source_relative \
+	--go-grpc_out=./internal/pb --go-grpc_opt=paths=source_relative \
+	./api/proto/*.proto
 
 sqlc-generate:
 	find internal/db ! -name '*_conv.go' ! -name '.gitignore' -type f -exec rm -f {} +
 	sqlc generate
 
-generate: proto-generate sqlc-generate
+generate: proto-generate
 
 fmt:
 	go fmt ./...

@@ -4,11 +4,11 @@ import (
 	"fmt"
 
 	"github.com/docker/docker/api/types/strslice"
-	"github.com/zanz1n/mc-manager/internal/pb/distropb"
+	"github.com/zanz1n/mc-manager/internal/pb"
 )
 
 type JavaVariant interface {
-	GetImage(distropb.JavaVersion) (string, error)
+	GetImage(pb.JavaVersion) (string, error)
 }
 
 var _ JavaVariant = (*temurinJre)(nil)
@@ -23,7 +23,7 @@ func NewTemurinJre(distro string) JavaVariant {
 }
 
 // GetImage implements JavaVariant.
-func (t *temurinJre) GetImage(v distropb.JavaVersion) (string, error) {
+func (t *temurinJre) GetImage(v pb.JavaVersion) (string, error) {
 	return fmt.Sprintf("eclipse-temurin:%d-jre-%s", v, t.distro), nil
 }
 

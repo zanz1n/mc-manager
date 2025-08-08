@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/zanz1n/mc-manager/internal/pb/distropb"
+	"github.com/zanz1n/mc-manager/internal/pb"
 )
 
 type paperManifest struct {
@@ -161,10 +161,10 @@ func (d *paper) getVersion(ctx context.Context, version paperVersion) (Version, 
 	}
 	javaVersion := normalizeJavaLts(version.Version.Java.Version.Minimum)
 
-	htype := distropb.HashType_SHA256
+	htype := pb.HashType_SHA256
 	hash, err := hex.DecodeString(download.Checksums.SHA256)
 	if err != nil {
-		htype, hash = distropb.HashType_HASH_NONE, nil
+		htype, hash = pb.HashType_HASH_NONE, nil
 	}
 
 	return Version{
@@ -173,7 +173,7 @@ func (d *paper) getVersion(ctx context.Context, version paperVersion) (Version, 
 		Hash:         hash,
 		JVMArgs:      version.Version.Java.Flags.Recomended,
 		HashType:     htype,
-		Distribution: distropb.Distribution_PAPER,
+		Distribution: pb.Distribution_PAPER,
 		JavaVersion:  javaVersion,
 	}, nil
 }
