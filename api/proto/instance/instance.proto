@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package instance;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "./instancepb";
+
+message InstanceLimits {
+  google.protobuf.Duration shutdown_after_idle = 1;
+  bool auto_shutdown = 2;
+  int32 max_players = 3;
+  uint32 cpu = 4;
+  uint64 ram = 5;
+}
+
+message InstanceConfig {
+  string difficulty = 1;
+  string admin = 2;
+  uint32 port = 3;
+  uint32 view_distance = 4;
+  uint32 simulation_distance = 5;
+  bool allow_pirate = 6;
+  bool pvp = 7;
+}
+
+message InstanceCreateData {
+  fixed64 id = 1;
+  string name = 2;
+  // json
+  string version = 3;
+  InstanceLimits limits = 4;
+  InstanceConfig config = 5;
+}
+
+enum InstanceState {
+  STATE_OFFLINE = 0;
+  STATE_STARTING = 1;
+  STATE_RUNNING = 2;
+  STATE_SHUTTING_DOWN = 3;
+}
+
+message Instance {
+  fixed64 id = 1;
+  string container_id = 2;
+  google.protobuf.Timestamp launched_at = 3;
+  string name = 4;
+  int32 players = 5;
+  bool launched = 6;
+  // json
+  string version = 7;
+  InstanceLimits limits = 8;
+  InstanceConfig config = 9;
+  InstanceState state = 10;
+}

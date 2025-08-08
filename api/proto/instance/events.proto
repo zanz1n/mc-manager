@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package instance;
+
+option go_package = "./instancepb";
+
+enum EventType {
+  EVENT_NONE = 0;
+  EVENT_LOG = 1;
+  EVENT_AVAILABLE = 2;
+  EVENT_SHUTTING_DOWN = 3;
+  EVENT_STOPPED = 4;
+}
+
+message Event {
+  EventType kind = 1;
+  bytes data = 2;
+}
