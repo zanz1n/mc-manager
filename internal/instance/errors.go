@@ -1,14 +1,41 @@
 package instance
 
-import "errors"
+import (
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
 
 var (
-	ErrJavaVersion       = errors.New("the instance java version is invalid")
-	ErrFileSystem        = errors.New("filesystem error")
-	ErrInstanceNotFound  = errors.New("instance not found")
-	ErrInstanceCreate    = errors.New("failed to create instance")
-	ErrInstanceLaunch    = errors.New("failed to launch instance")
-	ErrInstanceStop      = errors.New("failed to stop instance")
-	ErrInvalidCreateData = errors.New("invalid instance create data")
-	ErrSendCommand       = errors.New("failed to send command to instance")
+	ErrJavaVersion = status.Error(
+		codes.NotFound,
+		"the instance java version is invalid",
+	)
+	ErrFileSystem = status.Error(
+		codes.Internal,
+		"filesystem error",
+	)
+	ErrInstanceNotFound = status.Error(
+		codes.NotFound,
+		"instance not found",
+	)
+	ErrInstanceCreate = status.Error(
+		codes.Internal,
+		"failed to create instance",
+	)
+	ErrInstanceLaunch = status.Error(
+		codes.Internal,
+		"failed to launch instance",
+	)
+	ErrInstanceStop = status.Error(
+		codes.Internal,
+		"failed to stop instance",
+	)
+	ErrInvalidCreateData = status.Error(
+		codes.InvalidArgument,
+		"invalid instance create data",
+	)
+	ErrSendCommand = status.Error(
+		codes.Internal,
+		"failed to send command to instance",
+	)
 )

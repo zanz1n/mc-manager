@@ -33,6 +33,17 @@ type Version struct {
 	JavaVersion  pb.JavaVersion  `json:"java_version"`
 }
 
+func (v *Version) IntoPB() *pb.Version {
+	return &pb.Version{
+		Id:           v.ID,
+		Distribution: v.Distribution,
+		Url:          v.URL,
+		HashType:     v.HashType,
+		Hash:         v.Hash,
+		JavaVersion:  v.JavaVersion,
+	}
+}
+
 // The returned hash can be nil in case the hash is not available.
 func (v *Version) CreateHash() (h hash.Hash) {
 	switch v.HashType {

@@ -42,7 +42,10 @@ func sanitizeMcProperties(dataDir string, instance *Instance) error {
 
 	if instance.Config.Difficulty != "" {
 		config["difficulty"] = instance.Config.Difficulty
+	} else {
+		config["difficulty"] = "easy"
 	}
+
 	if instance.Limits.MaxPlayers != 0 {
 		config["max-players"] = strconv.Itoa(int(instance.Limits.MaxPlayers))
 	}

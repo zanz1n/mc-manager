@@ -11,6 +11,8 @@ import (
 	"github.com/zanz1n/mc-manager/internal/distribution"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -34,11 +36,31 @@ type InstanceLimits struct {
 	MaxPlayers int32 `json:"max_players"`
 
 	// 100 = 1 core
-	CPU uint16 `json:"cpu" validate:"gte=0,lte=6400"`
+	CPU uint32 `json:"cpu" validate:"gte=0,lte=6400"`
 	// in Bytes
 	//
 	// min: 512 MiB, max: 512 GiB
 	RAM uint64 `json:"ram" validate:"gte=536870912,lte=549755813888"`
+}
+
+func (i *InstanceLimits) FromPB(data *pb.InstanceLimits) {
+	*i = InstanceLimits{
+		ShutdownAfterIdle: data.ShutdownAfterIdle.AsDuration(),
+		AutoShutdown:      data.AutoShutdown,
+		MaxPlayers:        data.MaxPlayers,
+		CPU:               data.Cpu,
+		RAM:               data.Ram,
+	}
+}
+
+func (i *InstanceLimits) IntoPB() *pb.InstanceLimits {
+	return &pb.InstanceLimits{
+		ShutdownAfterIdle: durationpb.New(i.ShutdownAfterIdle),
+		AutoShutdown:      i.AutoShutdown,
+		MaxPlayers:        i.MaxPlayers,
+		Cpu:               i.CPU,
+		Ram:               i.RAM,
+	}
 }
 
 type InstanceConfig struct {
@@ -52,6 +74,30 @@ type InstanceConfig struct {
 
 	AllowPirate bool `json:"allow_pirate"`
 	PVP         bool `json:"pvp"`
+}
+
+func (i *InstanceConfig) FromPB(data *pb.InstanceConfig) {
+	*i = InstanceConfig{
+		Difficulty:         data.Difficulty,
+		Admin:              data.Admin,
+		Port:               uint16(data.Port),
+		ViewDistance:       uint8(data.ViewDistance),
+		SimulationDistance: uint8(data.SimulationDistance),
+		AllowPirate:        data.AllowPirate,
+		PVP:                data.Pvp,
+	}
+}
+
+func (i *InstanceConfig) IntoPB() *pb.InstanceConfig {
+	return &pb.InstanceConfig{
+		Difficulty:         i.Difficulty,
+		Admin:              i.Admin,
+		Port:               uint32(i.Port),
+		ViewDistance:       uint32(i.ViewDistance),
+		SimulationDistance: uint32(i.SimulationDistance),
+		AllowPirate:        i.AllowPirate,
+		Pvp:                i.PVP,
+	}
 }
 
 type InstanceCreateData struct {
@@ -100,6 +146,21 @@ type Instance struct {
 	listeners map[chan<- Event]struct{}
 	stream    types.HijackedResponse
 	mu        sync.Mutex
+}
+
+func (i *Instance) IntoPB() *pb.Instance {
+	return &pb.Instance{
+		Id:          uint64(i.ID),
+		ContainerId: i.ContainerID,
+		LaunchedAt:  timestamppb.New(i.LaunchedAt),
+		Name:        i.Name,
+		Players:     i.Players.Load(),
+		Launched:    i.Launched.Load(),
+		Version:     i.Version.IntoPB(),
+		Limits:      i.Limits.IntoPB(),
+		Config:      i.Config.IntoPB(),
+		State:       i.GetState(),
+	}
 }
 
 func (i *Instance) SendCommand(cmd string) error {
