@@ -17,20 +17,19 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	IP               net.IP `json:"ip" yaml:"ip"`
-	Port             uint16 `json:"port" yaml:"port"`
+	IP               net.IP `json:"ip" yaml:"ip" validate:"required"`
+	Port             uint16 `json:"port" yaml:"port" validate:"required"`
 	Password         string `json:"password" yaml:"password"`
 	EnableReflection bool   `json:"enable_reflection" yaml:"enable-reflection"`
 }
 
 type DockerConfig struct {
-	URL         string `json:"url" yaml:"url" validate:"url"`
-	Prefix      string `json:"prefix" yaml:"prefix"`
-	NetworkName string `json:"network_name" yaml:"network-name"`
+	Prefix      string `json:"prefix" yaml:"prefix" validate:"required"`
+	NetworkName string `json:"network_name" yaml:"network-name" validate:"required"`
 }
 
 type DataConfig struct {
-	DataDir string `json:"data_dir" yaml:"data-dir"`
+	DataDir string `json:"data_dir" yaml:"data-dir" validate:"required"`
 }
 
 func WriteConfig(name string, cfg *Config) (err error) {
