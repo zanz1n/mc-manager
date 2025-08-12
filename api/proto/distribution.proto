@@ -9,7 +9,7 @@ message Version {
   Distribution distribution = 2;
   string url = 3;
   HashType hash_type = 4;
-  string hash = 5;
+  bytes hash = 5;
   JavaVersion java_version = 6;
 }
 
