@@ -18,6 +18,10 @@ var (
 		codes.NotFound,
 		"instance not found",
 	)
+	ErrInstanceAlreadyLaunched = status.Error(
+		codes.AlreadyExists,
+		"instance already launched",
+	)
 	ErrInstanceCreate = status.Error(
 		codes.Internal,
 		"failed to create instance",

@@ -27,6 +27,13 @@ type Event struct {
 	Data []byte       `json:"data"`
 }
 
+func (e *Event) IntoPB() *pb.Event {
+	return &pb.Event{
+		Kind: e.Type,
+		Data: e.Data,
+	}
+}
+
 type InstanceLimits struct {
 	// when it is <= 0 the default value will be used
 	ShutdownAfterIdle time.Duration `json:"shutdown_after_idle"`
@@ -124,7 +131,8 @@ func newInstance(data InstanceCreateData) (*Instance, error) {
 		Version:    data.Version,
 		Limits:     data.Limits,
 		Config:     data.Config,
-		listeners:  make(map[chan<- Event]struct{}),
+		lnLogs:     make(map[chan<- Event]struct{}),
+		ln:         make(map[chan<- Event]struct{}),
 	}, nil
 }
 
@@ -143,9 +151,10 @@ type Instance struct {
 
 	state atomic.Int32
 
-	listeners map[chan<- Event]struct{}
-	stream    types.HijackedResponse
-	mu        sync.Mutex
+	lnLogs map[chan<- Event]struct{}
+	ln     map[chan<- Event]struct{}
+	stream types.HijackedResponse
+	mu     sync.Mutex
 }
 
 func (i *Instance) IntoPB() *pb.Instance {
@@ -181,20 +190,45 @@ func (i *Instance) SendCommand(cmd string) error {
 	return err
 }
 
-func (i *Instance) AttachListener(ch chan Event) {
+func (i *Instance) AttachListener(logs bool) chan Event {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	i.listeners[ch] = struct{}{}
+	ch := make(chan Event)
+
+	if logs {
+		i.lnLogs[ch] = struct{}{}
+	} else {
+		i.ln[ch] = struct{}{}
+	}
+
+	return ch
 }
 
 func (i *Instance) DetachListener(ch chan Event) bool {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	_, ok := i.listeners[ch]
-	delete(i.listeners, ch)
+	_, ok := i.lnLogs[ch]
+	if ok {
+		delete(i.lnLogs, ch)
+		close(ch)
+		return true
+	}
+
+	_, ok = i.ln[ch]
+	if ok {
+		delete(i.ln, ch)
+		close(ch)
+	}
 	return ok
+}
+
+func (i *Instance) ListenersCount() int {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	return len(i.ln) + len(i.lnLogs)
 }
 
 func (i *Instance) GetState() pb.InstanceState {
@@ -209,7 +243,12 @@ func (i *Instance) SendEvent(e Event) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	for ch, _ := range i.listeners {
+	c := i.ln
+	if e.Type == pb.EventType_EVENT_LOG {
+		c = i.lnLogs
+	}
+
+	for ch, _ := range c {
 		counter := time.Tick(10 * time.Millisecond)
 		select {
 		case ch <- e:
@@ -246,12 +285,13 @@ func (i *Instance) close() {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	for ch, _ := range i.listeners {
-		counter := time.Tick(10 * time.Millisecond)
-		select {
-		case ch <- Event{Type: pb.EventType_EVENT_STOPPED}:
-		case <-counter:
-		}
+	__closelisteners(i.ln)
+	__closelisteners(i.lnLogs)
+}
+
+func __closelisteners(ln map[chan<- Event]struct{}) {
+	for ch, _ := range ln {
 		close(ch)
+		delete(ln, ch)
 	}
 }
