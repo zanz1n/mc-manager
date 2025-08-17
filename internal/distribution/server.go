@@ -20,7 +20,7 @@ func NewServer(r *Repository) *Server {
 // GetLatest implements pb.DistributionServiceServer.
 func (s *Server) GetLatest(
 	ctx context.Context,
-	req *pb.GetLatestRequest,
+	req *pb.DistributionGetLatestRequest,
 ) (*pb.Version, error) {
 	v, err := s.r.GetLatest(ctx, req.Distribution)
 	if err != nil {
@@ -33,7 +33,7 @@ func (s *Server) GetLatest(
 // GetVersion implements pb.DistributionServiceServer.
 func (s *Server) GetVersion(
 	ctx context.Context,
-	req *pb.GetVersionRequest,
+	req *pb.DistributionGetVersionRequest,
 ) (*pb.Version, error) {
 	v, err := s.r.GetVersion(ctx, req.Distribution, req.VersionId)
 	if err != nil {
@@ -46,14 +46,14 @@ func (s *Server) GetVersion(
 // GetAll implements pb.DistributionServiceServer.
 func (s *Server) GetAll(
 	ctx context.Context,
-	req *pb.GetAllRequest,
-) (*pb.GetAllResponse, error) {
+	req *pb.DistributionGetAllRequest,
+) (*pb.DistributionGetAllResponse, error) {
 	v, err := s.r.GetAll(ctx, req.Distribution)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.GetAllResponse{
+	return &pb.DistributionGetAllResponse{
 		Versions: v,
 	}, nil
 }

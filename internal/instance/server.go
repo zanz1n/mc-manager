@@ -13,13 +13,13 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-var _ pb.InstanceServiceServer = (*Server)(nil)
+var _ pb.RunnerServiceServer = (*Server)(nil)
 var _ pb.EventServiceServer = (*Server)(nil)
 
 type Server struct {
 	m        *Manager
 	versions *distribution.Repository
-	pb.UnimplementedInstanceServiceServer
+	pb.UnimplementedRunnerServiceServer
 	pb.UnimplementedEventServiceServer
 }
 
@@ -30,8 +30,8 @@ func NewServer(m *Manager, v *distribution.Repository) *Server {
 // GetById implements pb.InstanceServiceServer.
 func (s *Server) GetById(
 	ctx context.Context,
-	req *pb.InstanceGetByIdRequest,
-) (*pb.Instance, error) {
+	req *pb.RunnerGetByIdRequest,
+) (*pb.RunningInstance, error) {
 	i, err := s.m.GetById(ctx, dto.Snowflake(req.Id))
 	if err != nil {
 		return nil, err
@@ -43,8 +43,8 @@ func (s *Server) GetById(
 // Launch implements pb.InstanceServiceServer.
 func (s *Server) Launch(
 	ctx context.Context,
-	req *pb.InstanceLaunchRequest,
-) (*pb.Instance, error) {
+	req *pb.RunnerLaunchRequest,
+) (*pb.RunningInstance, error) {
 	var (
 		version distribution.Version
 		err     error
@@ -83,8 +83,8 @@ func (s *Server) Launch(
 // Stop implements pb.InstanceServiceServer.
 func (s *Server) Stop(
 	ctx context.Context,
-	req *pb.InstanceStopRequest,
-) (*pb.Instance, error) {
+	req *pb.RunnerStopRequest,
+) (*pb.RunningInstance, error) {
 	i, err := s.m.GetById(ctx, dto.Snowflake(req.Id))
 	if err != nil {
 		return nil, err

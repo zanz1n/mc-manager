@@ -157,8 +157,8 @@ type Instance struct {
 	mu     sync.Mutex
 }
 
-func (i *Instance) IntoPB() *pb.Instance {
-	return &pb.Instance{
+func (i *Instance) IntoPB() *pb.RunningInstance {
+	return &pb.RunningInstance{
 		Id:          uint64(i.ID),
 		ContainerId: i.ContainerID,
 		LaunchedAt:  timestamppb.New(i.LaunchedAt),

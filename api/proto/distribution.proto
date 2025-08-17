@@ -36,27 +36,27 @@ enum JavaVersion {
   JAVA24 = 24;
 }
 
-message GetLatestRequest {
+message DistributionGetLatestRequest {
   Distribution distribution = 1;
 }
 
-message GetVersionRequest {
+message DistributionGetVersionRequest {
   Distribution distribution = 1;
   string version_id = 2;
 }
 
-message GetAllRequest {
+message DistributionGetAllRequest {
   Distribution distribution = 1;
 }
 
-message GetAllResponse {
+message DistributionGetAllResponse {
   repeated string versions = 1;
 }
 
 service DistributionService {
-  rpc GetLatest(GetLatestRequest) returns (Version);
+  rpc GetLatest(DistributionGetLatestRequest) returns (Version);
 
-  rpc GetVersion(GetVersionRequest) returns (Version);
+  rpc GetVersion(DistributionGetVersionRequest) returns (Version);
 
-  rpc GetAll(GetAllRequest) returns (GetAllResponse);
+  rpc GetAll(DistributionGetAllRequest) returns (DistributionGetAllResponse);
 }

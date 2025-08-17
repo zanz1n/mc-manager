@@ -116,7 +116,7 @@ func Serve(
 		server,
 		distribution.NewServer(distributions),
 	)
-	pb.RegisterInstanceServiceServer(server, instanceServer)
+	pb.RegisterRunnerServiceServer(server, instanceServer)
 	pb.RegisterEventServiceServer(server, instanceServer)
 
 	if cfg.Server.EnableReflection {
