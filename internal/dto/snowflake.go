@@ -57,6 +57,10 @@ func (s Snowflake) Rand() uint32 {
 	return uint32(s & SnowflakeRandMask)
 }
 
+func (s Snowflake) IsNull() bool {
+	return s == 0
+}
+
 // Scan implements sql.Scanner.
 func (s *Snowflake) Scan(src any) error {
 	switch src := src.(type) {
@@ -109,6 +113,9 @@ func (s Snowflake) String() string {
 
 // Value implements driver.Valuer.
 func (s Snowflake) Value() (driver.Value, error) {
+	if s == 0 {
+		return nil, nil
+	}
 	return int64(s), nil
 }
 
