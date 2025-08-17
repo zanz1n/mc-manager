@@ -2,6 +2,7 @@ package instance
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
@@ -102,9 +104,9 @@ func (r *dockerRunner) createNetwork(ctx context.Context) error {
 }
 
 func (r *dockerRunner) Create(ctx context.Context, instance *Instance) error {
-	dockerImage, err := r.java.GetImage(instance.Version.JavaVersion)
+	dockerImage, err := r.pullImage(instance.Version.JavaVersion)
 	if err != nil {
-		return errors.Join(ErrJavaVersion, err)
+		return err
 	}
 
 	dataDir := path.Join(r.dir, instance.ID.String())
@@ -112,9 +114,17 @@ func (r *dockerRunner) Create(ctx context.Context, instance *Instance) error {
 		return errors.Join(ErrFileSystem, err)
 	}
 
-	jarName := fmt.Sprintf("%s-%s.jar",
+	var hashb []byte
+	if len(instance.Version.Hash) > 5 {
+		hashb = instance.Version.Hash[0:4]
+	} else {
+		hashb = instance.Version.Hash
+	}
+
+	jarName := fmt.Sprintf("%s-%s-%s.jar",
 		strings.ToLower(instance.Version.Distribution.String()),
 		instance.Version.ID,
+		hex.EncodeToString(hashb),
 	)
 
 	jarDir := path.Join(dataDir, jarName)
@@ -266,4 +276,27 @@ func (r *dockerRunner) Stop(ctx context.Context, instance *Instance) error {
 	instance.close()
 
 	return nil
+}
+
+func (r *dockerRunner) pullImage(v pb.JavaVersion) (string, error) {
+	ref, err := r.java.GetImage(v)
+	if err != nil {
+		return "", err
+	}
+
+	res, err := r.docker.ImagePull(context.Background(), ref, image.PullOptions{})
+	if err != nil {
+		return "", errors.Join(ErrJavaVersion, err)
+	}
+	defer res.Close()
+
+	b := make([]byte, 1024)
+	for {
+		_, err = res.Read(b)
+		if err != nil {
+			break
+		}
+	}
+
+	return ref, nil
 }

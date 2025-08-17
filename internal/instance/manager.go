@@ -27,26 +27,22 @@ func NewManager(runner Runner) *Manager {
 func (m *Manager) Launch(ctx context.Context, data InstanceCreateData) (*Instance, error) {
 	start := time.Now()
 
-	instance, err := newInstance(data)
-	if err != nil {
-		return nil, err
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	_, ok := m.m[instance.ID]
-	if ok {
+	if _, err := m.GetById(ctx, data.ID); err == nil {
 		return nil, errors.Join(
 			ErrInstanceAlreadyLaunched,
 			errors.New(data.ID.String()),
 		)
 	}
 
-	m.m[instance.ID] = instance
-
-	err = m.runner.Create(ctx, instance)
+	i, err := newInstance(data)
 	if err != nil {
+		return nil, err
+	}
+	m.insert(i)
+
+	err = m.runner.Create(ctx, i)
+	if err != nil {
+		m.remove(i.ID)
 		slog.Error(
 			"Manager: Failed to create instance",
 			"took", time.Since(start).Round(time.Microsecond),
@@ -55,11 +51,12 @@ func (m *Manager) Launch(ctx context.Context, data InstanceCreateData) (*Instanc
 		return nil, err
 	}
 
-	err = m.runner.Launch(ctx, instance)
+	err = m.runner.Launch(ctx, i)
 	if err != nil {
+		m.remove(i.ID)
 		slog.Error(
 			"Manager: Failed to launch instance",
-			"id", instance.ID,
+			"id", i.ID,
 			"took", time.Since(start).Round(time.Microsecond),
 			"error", err,
 		)
@@ -68,11 +65,11 @@ func (m *Manager) Launch(ctx context.Context, data InstanceCreateData) (*Instanc
 
 	slog.Info(
 		"Manager: Launched instance",
-		"id", instance.ID,
+		"id", i.ID,
 		"took", time.Since(start).Round(time.Microsecond),
 	)
 
-	return instance, nil
+	return i, nil
 }
 
 func (m *Manager) GetById(ctx context.Context, id dto.Snowflake) (*Instance, error) {
@@ -113,16 +110,12 @@ func (m *Manager) GetMany(ctx context.Context, ids []uint64) ([]*Instance, error
 func (m *Manager) Stop(ctx context.Context, id dto.Snowflake) error {
 	start := time.Now()
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	instance, ok := m.m[id]
-	if !ok {
-		return ErrInstanceNotFound
+	i, err := m.GetById(ctx, id)
+	if err != nil {
+		return err
 	}
-	delete(m.m, id)
 
-	err := m.runner.Stop(ctx, instance)
+	err = m.runner.Stop(ctx, i)
 	if err != nil {
 		slog.Error(
 			"Manager: Failed to stop instance",
@@ -137,5 +130,26 @@ func (m *Manager) Stop(ctx context.Context, id dto.Snowflake) error {
 			"took", time.Since(start).Round(time.Microsecond),
 		)
 	}
+
+	m.remove(id)
 	return err
+}
+
+func (m *Manager) insert(i *Instance) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.m[i.ID] = i
+}
+
+func (m *Manager) remove(id dto.Snowflake) (*Instance, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	i, ok := m.m[id]
+	if ok {
+		delete(m.m, id)
+	}
+
+	return i, ok
 }
