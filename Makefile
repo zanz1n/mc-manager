@@ -9,7 +9,7 @@ DEBUG ?= 0
 PREFIX ?= mc-
 SUFIX ?=
 
-BINS = manager
+BINS = runner
 DIR ?= bin
 TMP ?= tmp
 
