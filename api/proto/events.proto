@@ -10,30 +10,10 @@ enum EventType {
   EVENT_AVAILABLE = 2;
   EVENT_SHUTTING_DOWN = 3;
   EVENT_STOPPED = 4;
+  EVENT_LAUNCHED = 5;
 }
 
 message Event {
   EventType kind = 1;
   bytes data = 2;
-}
-
-message EventConsumeRequest {
-  fixed64 instance_id = 1;
-  bool include_logs = 2;
-}
-
-message EventConsumeManyRequest {
-  bool include_logs = 1;
-  repeated fixed64 instances = 2;
-}
-
-message EventConsumeManyResponse {
-  fixed64 instance_id = 1;
-  Event event = 2;
-}
-
-service EventService {
-  rpc Consume(EventConsumeRequest) returns (stream Event);
-
-  rpc ConsumeMany(EventConsumeManyRequest) returns (stream EventConsumeManyResponse);
 }

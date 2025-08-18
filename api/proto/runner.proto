@@ -3,6 +3,7 @@ syntax = "proto3";
 package manager;
 
 import "distribution.proto";
+import "events.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 import "instance.proto";
@@ -40,10 +41,29 @@ message RunnerStopRequest {
   google.protobuf.Duration timeout = 2;
 }
 
+message RunnerListenRequest {
+  fixed64 instance_id = 1;
+  bool include_logs = 2;
+}
+
+message RunnerListenManyRequest {
+  bool include_logs = 1;
+  repeated fixed64 instances = 2;
+}
+
+message RunnerListenManyResponse {
+  fixed64 instance_id = 1;
+  Event event = 2;
+}
+
 service RunnerService {
   rpc GetById(RunnerGetByIdRequest) returns (RunningInstance);
 
   rpc Launch(RunnerLaunchRequest) returns (RunningInstance);
 
   rpc Stop(RunnerStopRequest) returns (RunningInstance);
+
+  rpc Listen(RunnerListenRequest) returns (stream Event);
+
+  rpc ListenMany(RunnerListenManyRequest) returns (stream RunnerListenManyResponse);
 }

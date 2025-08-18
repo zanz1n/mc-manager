@@ -1,4 +1,4 @@
-package instance
+package runner
 
 import (
 	"context"
@@ -14,13 +14,13 @@ type Manager struct {
 	m  map[dto.Snowflake]*Instance
 	mu sync.RWMutex
 
-	runner Runner
+	rt Runtime
 }
 
-func NewManager(runner Runner) *Manager {
+func NewManager(rt Runtime) *Manager {
 	return &Manager{
-		m:      make(map[dto.Snowflake]*Instance),
-		runner: runner,
+		m:  make(map[dto.Snowflake]*Instance),
+		rt: rt,
 	}
 }
 
@@ -40,7 +40,7 @@ func (m *Manager) Launch(ctx context.Context, data InstanceCreateData) (*Instanc
 	}
 	m.insert(i)
 
-	err = m.runner.Create(ctx, i)
+	err = m.rt.Create(ctx, i)
 	if err != nil {
 		m.remove(i.ID)
 		slog.Error(
@@ -51,7 +51,7 @@ func (m *Manager) Launch(ctx context.Context, data InstanceCreateData) (*Instanc
 		return nil, err
 	}
 
-	err = m.runner.Launch(ctx, i)
+	err = m.rt.Launch(ctx, i)
 	if err != nil {
 		m.remove(i.ID)
 		slog.Error(
@@ -115,7 +115,7 @@ func (m *Manager) Stop(ctx context.Context, id dto.Snowflake) error {
 		return err
 	}
 
-	err = m.runner.Stop(ctx, i)
+	err = m.rt.Stop(ctx, i)
 	if err != nil {
 		slog.Error(
 			"Manager: Failed to stop instance",

@@ -1,4 +1,4 @@
-package instance
+package runner
 
 import (
 	"context"
@@ -23,13 +23,13 @@ import (
 	"github.com/zanz1n/mc-manager/internal/pb"
 )
 
-type Runner interface {
+type Runtime interface {
 	Create(ctx context.Context, instance *Instance) error
 	Launch(ctx context.Context, instance *Instance) error
 	Stop(ctx context.Context, instance *Instance) error
 }
 
-type dockerRunner struct {
+type dockerRuntime struct {
 	dockerPrefix    string
 	dockerNetwork   string
 	dockerNetworkId string
@@ -40,13 +40,13 @@ type dockerRunner struct {
 	c      *http.Client
 }
 
-func NewDockerRunner(
+func NewDockerRuntime(
 	ctx context.Context,
 	cfg *config.Config,
 	docker *client.Client,
 	c *http.Client,
 	java JavaVariant,
-) (Runner, error) {
+) (Runtime, error) {
 	if c == nil {
 		c = http.DefaultClient
 	}
@@ -56,7 +56,7 @@ func NewDockerRunner(
 		return nil, err
 	}
 
-	r := &dockerRunner{
+	r := &dockerRuntime{
 		dockerPrefix:  cfg.Docker.Prefix,
 		dockerNetwork: cfg.Docker.NetworkName,
 		dir:           dir,
@@ -71,7 +71,7 @@ func NewDockerRunner(
 	return r, nil
 }
 
-func (r *dockerRunner) createNetwork(ctx context.Context) error {
+func (r *dockerRuntime) createNetwork(ctx context.Context) error {
 	nw, err := r.docker.NetworkInspect(ctx, r.dockerNetwork, network.InspectOptions{})
 	if err != nil {
 		nw, err := r.docker.NetworkCreate(ctx, r.dockerNetwork, network.CreateOptions{
@@ -103,7 +103,7 @@ func (r *dockerRunner) createNetwork(ctx context.Context) error {
 	return nil
 }
 
-func (r *dockerRunner) Create(ctx context.Context, instance *Instance) error {
+func (r *dockerRuntime) Create(ctx context.Context, instance *Instance) error {
 	dockerImage, err := r.pullImage(instance.Version.JavaVersion)
 	if err != nil {
 		return err
@@ -209,7 +209,7 @@ func (r *dockerRunner) Create(ctx context.Context, instance *Instance) error {
 	return nil
 }
 
-func (r *dockerRunner) Launch(ctx context.Context, instance *Instance) error {
+func (r *dockerRuntime) Launch(ctx context.Context, instance *Instance) error {
 	if instance.ContainerID == "" {
 		return errors.Join(
 			ErrInstanceLaunch,
@@ -239,7 +239,7 @@ func (r *dockerRunner) Launch(ctx context.Context, instance *Instance) error {
 	return nil
 }
 
-func (r *dockerRunner) Stop(ctx context.Context, instance *Instance) error {
+func (r *dockerRuntime) Stop(ctx context.Context, instance *Instance) error {
 	if instance.ContainerID == "" {
 		return errors.Join(
 			ErrInstanceStop,
@@ -278,7 +278,7 @@ func (r *dockerRunner) Stop(ctx context.Context, instance *Instance) error {
 	return nil
 }
 
-func (r *dockerRunner) pullImage(v pb.JavaVersion) (string, error) {
+func (r *dockerRuntime) pullImage(v pb.JavaVersion) (string, error) {
 	ref, err := r.java.GetImage(v)
 	if err != nil {
 		return "", err

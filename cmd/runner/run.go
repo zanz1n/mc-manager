@@ -10,8 +10,8 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/distribution"
-	"github.com/zanz1n/mc-manager/internal/instance"
 	"github.com/zanz1n/mc-manager/internal/pb"
+	"github.com/zanz1n/mc-manager/internal/runner"
 	"github.com/zanz1n/mc-manager/internal/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -50,18 +50,18 @@ func Run(ctx context.Context, cfg *config.Config) {
 		distribution.NewPaper(nil),
 	)
 
-	runner, err := instance.NewDockerRunner(
+	runtime, err := runner.NewDockerRuntime(
 		context.Background(),
 		cfg,
 		docker,
 		nil,
-		instance.NewTemurinJre("noble"),
+		runner.NewTemurinJre("noble"),
 	)
 	if err != nil {
 		log.Fatalln("Failed to create docker runner:", err)
 	}
 
-	manager := instance.NewManager(runner)
+	manager := runner.NewManager(runtime)
 
 	Serve(ctx, cfg, distributions, manager)
 }
@@ -70,7 +70,7 @@ func Serve(
 	ctx context.Context,
 	cfg *config.Config,
 	distributions *distribution.Repository,
-	manager *instance.Manager,
+	manager *runner.Manager,
 ) {
 	start := time.Now()
 	ln, err := net.ListenTCP("tcp", &net.TCPAddr{
@@ -109,7 +109,7 @@ func Serve(
 		)
 	}
 
-	instanceServer := instance.NewServer(manager, distributions)
+	instanceServer := runner.NewServer(manager, distributions)
 
 	server := grpc.NewServer(opts...)
 	pb.RegisterDistributionServiceServer(
@@ -117,7 +117,6 @@ func Serve(
 		distribution.NewServer(distributions),
 	)
 	pb.RegisterRunnerServiceServer(server, instanceServer)
-	pb.RegisterEventServiceServer(server, instanceServer)
 
 	if cfg.Server.EnableReflection {
 		reflection.Register(server)

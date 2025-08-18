@@ -1,4 +1,4 @@
-package instance
+package runner
 
 import (
 	"context"
@@ -14,20 +14,18 @@ import (
 )
 
 var _ pb.RunnerServiceServer = (*Server)(nil)
-var _ pb.EventServiceServer = (*Server)(nil)
 
 type Server struct {
 	m        *Manager
 	versions *distribution.Repository
 	pb.UnimplementedRunnerServiceServer
-	pb.UnimplementedEventServiceServer
 }
 
 func NewServer(m *Manager, v *distribution.Repository) *Server {
 	return &Server{m: m, versions: v}
 }
 
-// GetById implements pb.InstanceServiceServer.
+// GetById implements pb.RunnerServiceServer.
 func (s *Server) GetById(
 	ctx context.Context,
 	req *pb.RunnerGetByIdRequest,
@@ -40,7 +38,7 @@ func (s *Server) GetById(
 	return i.IntoPB(), nil
 }
 
-// Launch implements pb.InstanceServiceServer.
+// Launch implements pb.RunnerServiceServer.
 func (s *Server) Launch(
 	ctx context.Context,
 	req *pb.RunnerLaunchRequest,
@@ -80,7 +78,7 @@ func (s *Server) Launch(
 	return i.IntoPB(), nil
 }
 
-// Stop implements pb.InstanceServiceServer.
+// Stop implements pb.RunnerServiceServer.
 func (s *Server) Stop(
 	ctx context.Context,
 	req *pb.RunnerStopRequest,
@@ -99,9 +97,9 @@ func (s *Server) Stop(
 	return i.IntoPB(), nil
 }
 
-// Consume implements pb.EventServiceServer.
-func (s *Server) Consume(
-	req *pb.EventConsumeRequest,
+// Listen implements pb.RunnerServiceServer.
+func (s *Server) Listen(
+	req *pb.RunnerListenRequest,
 	stream grpc.ServerStreamingServer[pb.Event],
 ) error {
 	i, err := s.m.GetById(stream.Context(), dto.Snowflake(req.InstanceId))
@@ -141,10 +139,10 @@ func (s *Server) Consume(
 	return nil
 }
 
-// ConsumeMany implements pb.EventServiceServer.
-func (s *Server) ConsumeMany(
-	req *pb.EventConsumeManyRequest,
-	stream grpc.ServerStreamingServer[pb.EventConsumeManyResponse],
+// ListenMany implements pb.RunnerServiceServer.
+func (s *Server) ListenMany(
+	req *pb.RunnerListenManyRequest,
+	stream grpc.ServerStreamingServer[pb.RunnerListenManyResponse],
 ) error {
 	instances, err := s.m.GetMany(stream.Context(), req.Instances)
 	if err != nil {
@@ -179,7 +177,7 @@ func (s *Server) ConsumeMany(
 			break
 		}
 
-		err := stream.Send(&pb.EventConsumeManyResponse{
+		err := stream.Send(&pb.RunnerListenManyResponse{
 			InstanceId: uint64(ev.id),
 			Event:      ev.IntoPB(),
 		})

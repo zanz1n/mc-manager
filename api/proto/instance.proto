@@ -4,6 +4,7 @@ package manager;
 
 import "distribution.proto";
 import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
 option go_package = "./pb";
@@ -31,4 +32,61 @@ enum InstanceState {
   STATE_STARTING = 1;
   STATE_RUNNING = 2;
   STATE_SHUTTING_DOWN = 3;
+}
+
+message Instance {
+  fixed64 id = 1;
+  fixed64 user_id = 2;
+  fixed64 runner_id = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  // nullable
+  google.protobuf.Timestamp last_launched = 6;
+  InstanceState state = 7;
+  int32 players = 8;
+  string name = 9;
+  string description = 10;
+  string version = 11;
+  Distribution version_distro = 12;
+  bool maintenance = 13;
+  InstanceConfig config = 14;
+  InstanceLimits limits = 15;
+}
+
+message InstanceGetByIdRequest {
+  fixed64 id = 1;
+}
+
+message InstanceLaunchRequest {
+  fixed64 id = 1;
+}
+
+message InstanceCreateRequest {
+  fixed64 user_id = 1;
+  fixed64 runner_id = 2;
+  string name = 3;
+  string description = 4;
+  string version = 5;
+  Distribution version_distro = 6;
+  InstanceConfig config = 7;
+  InstanceLimits limits = 8;
+}
+
+message InstanceDeleteRequest {
+  fixed64 id = 1;
+}
+
+message InstanceGetEventsRequest {
+  fixed64 id = 1;
+  bool include_logs = 2;
+}
+
+service InstanceService {
+  rpc GetById(InstanceGetByIdRequest) returns (Instance);
+
+  rpc Launch(InstanceLaunchRequest) returns (google.protobuf.Empty);
+
+  rpc Create(InstanceCreateRequest) returns (Instance);
+
+  rpc Delete(InstanceDeleteRequest) returns (Instance);
 }
