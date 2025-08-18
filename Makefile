@@ -126,7 +126,7 @@ $(PROTOC):
 	unzip -q $(PROTOC).zip -d $(PROTOC)
 	rm -f $(PROTOC).zip
 
-proto-generate: $(PROTOC) deps
+proto-generate: $(PROTOC)
 	rm -f internal/pb/*pb.go
 
 	$(PROTOC)/bin/protoc $(PROTOC_INCLUDE) \
@@ -138,7 +138,7 @@ sqlc-generate:
 	find internal/db ! -name '*_conv.go' ! -name '.gitignore' -type f -exec rm -f {} +
 	sqlc generate
 
-generate: proto-generate
+generate: proto-generate sqlc-generate
 
 fmt:
 	go fmt ./...

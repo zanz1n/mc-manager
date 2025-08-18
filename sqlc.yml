@@ -1,0 +1,56 @@
+version: "2"
+
+sql:
+  - engine: postgresql
+    queries: sql/queries/*
+    schema: sql/migrations/*
+
+    gen:
+      go:
+        package: db
+        out: internal/db
+        emit_interface: true
+        emit_json_tags: true
+        emit_db_tags: true
+        emit_prepared_queries: true
+        json_tags_case_style: snake
+        query_parameter_limit: 3
+        overrides:
+          - column: "*.id"
+            go_type:
+              import: github.com/zanz1n/mc-manager/internal/dto
+              type: Snowflake
+
+          - column: "*.*_id"
+            go_type:
+              import: github.com/zanz1n/mc-manager/internal/dto
+              type: Snowflake
+
+          - db_type: pg_catalog.varchar
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+
+          - db_type: text
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+
+          - column: instances.config
+            go_type:
+              import: github.com/zanz1n/mc-manager/internal/pb
+              type: InstanceConfig
+              pointer: true
+
+          - column: instances.limits
+            go_type:
+              import: github.com/zanz1n/mc-manager/internal/pb
+              type: InstanceLimits
+              pointer: true
+
+          - column: instances.version_distro
+            go_type:
+              import: github.com/zanz1n/mc-manager/internal/pb
+              type: Distribution
