@@ -27,6 +27,11 @@ message RunnerGetByIdRequest {
   fixed64 id = 1;
 }
 
+message RunnerGetStateResponse {
+  int32 players = 1;
+  InstanceState state = 2;
+}
+
 message RunnerLaunchRequest {
   fixed64 id = 1;
   string name = 2;
@@ -58,6 +63,8 @@ message RunnerListenManyResponse {
 
 service RunnerService {
   rpc GetById(RunnerGetByIdRequest) returns (RunningInstance);
+
+  rpc GetStateById(RunnerGetByIdRequest) returns (RunnerGetStateResponse);
 
   rpc Launch(RunnerLaunchRequest) returns (RunningInstance);
 
