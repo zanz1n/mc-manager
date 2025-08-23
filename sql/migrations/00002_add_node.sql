@@ -2,7 +2,7 @@
 -- +goose StatementBegin
 SELECT 'up SQL query';
 
-CREATE TABLE runners (
+CREATE TABLE nodes (
     id bigint NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULt now(),
@@ -24,6 +24,6 @@ CREATE TABLE runners (
 -- +goose StatementBegin
 SELECT 'down SQL query';
 
-DROP TABLE IF EXISTS runners;
+DROP TABLE IF EXISTS nodes;
 
 -- +goose StatementEnd

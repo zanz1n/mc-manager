@@ -5,7 +5,7 @@ SELECT 'up SQL query';
 CREATE TABLE instances (
     id bigint NOT NULL,
     user_id bigint,
-    runner_id bigint,
+    node_id bigint,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULt now(),
     last_launched timestamptz,
@@ -24,14 +24,14 @@ CREATE TABLE instances (
     ON UPDATE CASCADE
     ON DELETE SET NULL,
 
-    CONSTRAINT instances_runner_id_fkey
-    FOREIGN KEY (runner_id) REFERENCES runners(id)
+    CONSTRAINT instances_node_id_fkey
+    FOREIGN KEY (node_id) REFERENCES nodes(id)
     ON UPDATE CASCADE
     ON DELETE RESTRICT
 );
 
 CREATE INDEX instances_user_id_idx ON instances(user_id);
-CREATE INDEX instances_runner_id_idx ON instances(runner_id);
+CREATE INDEX instances_node_id_idx ON instances(node_id);
 
 -- +goose StatementEnd
 
