@@ -1,13 +1,7 @@
 package config
 
 import (
-	"encoding/json"
-	"fmt"
 	"net"
-	"os"
-	"path/filepath"
-
-	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
@@ -33,50 +27,11 @@ type DataConfig struct {
 }
 
 func WriteConfig(name string, cfg *Config) (err error) {
-	ext := filepath.Ext(name)
-
-	var buf []byte
-	switch ext {
-	case ".yaml", ".yml":
-		buf, err = yaml.Marshal(cfg)
-	case ".json", ".jsonc":
-		buf, err = json.MarshalIndent(cfg, "", "  ")
-	default:
-		err = fmt.Errorf(
-			"failed to locate config file at '%s': unknown extension %s",
-			name,
-			ext,
-		)
-	}
-
-	if err != nil {
-		return
-	}
-	err = os.WriteFile(name, buf, 0666)
-	return
+	return writeCfg(name, cfg)
 }
 
 func GetConfig(name string) (*Config, error) {
-	file, err := os.ReadFile(name)
-	if err != nil {
-		return nil, err
-	}
-
-	ext := filepath.Ext(name)
 	var cfg Config
-
-	switch ext {
-	case ".yaml", ".yml":
-		err = yaml.Unmarshal(file, &cfg)
-	case ".json", ".jsonc":
-		err = json.Unmarshal(file, &cfg)
-	default:
-		return nil, fmt.Errorf(
-			"failed to open config file at '%s': unknown extension %s",
-			name,
-			ext,
-		)
-	}
-
+	err := getCfg(name, &cfg)
 	return &cfg, err
 }
