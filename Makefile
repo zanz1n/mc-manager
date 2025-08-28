@@ -9,7 +9,7 @@ DEBUG ?= 0
 PREFIX ?= mc-
 SUFIX ?=
 
-BINS = runner
+BINS = runner api
 DIR ?= bin
 TMP ?= tmp
 
