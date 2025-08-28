@@ -123,30 +123,15 @@ func Serve(
 	}
 
 	go server.Serve(ln)
-	defer closegrpc(3*time.Second, server)
-
-	<-ctx.Done()
-}
-
-func closegrpc(timeout time.Duration, server *grpc.Server) {
-	start := time.Now()
-
-	ch := make(chan struct{})
-	go func() {
-		server.GracefulStop()
-		ch <- struct{}{}
+	defer func() {
+		start := time.Now()
+		graceful := utils.CloseGrpc(3*time.Second, server)
+		slog.Info(
+			"GRPC: Closed server",
+			"graceful", graceful,
+			"took", time.Since(start).Round(time.Millisecond),
+		)
 	}()
 
-	graceful := false
-	select {
-	case <-ch:
-		graceful = true
-	case <-time.Tick(timeout):
-	}
-
-	slog.Info(
-		"GRPC: Closed server",
-		"graceful", graceful,
-		"took", time.Since(start).Round(time.Millisecond),
-	)
+	<-ctx.Done()
 }
