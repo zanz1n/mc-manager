@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package manager;
+
+option go_package = "./pb";
+
+message Pagination {
+  fixed64 last_seen = 1;
+  int32 limit = 2;
+}
+
+message Snowflake {
+  fixed64 id = 1;
+}

@@ -6,6 +6,7 @@ import "distribution.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "utils.proto";
 
 option go_package = "./pb";
 
@@ -53,12 +54,34 @@ message Instance {
   InstanceLimits limits = 15;
 }
 
-message InstanceGetByIdRequest {
+message PartialInstance {
   fixed64 id = 1;
+  fixed64 user_id = 2;
+  fixed64 node_id = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  // nullable
+  google.protobuf.Timestamp last_launched = 6;
+  InstanceState state = 7;
+  int32 players = 8;
+  string name = 9;
+  string version = 10;
+  Distribution version_distro = 11;
+  bool maintenance = 12;
 }
 
-message InstanceLaunchRequest {
-  fixed64 id = 1;
+message InstanceGetManyResponse {
+  repeated PartialInstance instances = 1;
+}
+
+message InstanceGetByUserRequest {
+  fixed64 user_id = 1;
+  Pagination pagination = 2;
+}
+
+message InstanceGetByNodeRequest {
+  fixed64 node_id = 1;
+  Pagination pagination = 2;
 }
 
 message InstanceCreateRequest {
@@ -72,21 +95,21 @@ message InstanceCreateRequest {
   InstanceLimits limits = 8;
 }
 
-message InstanceDeleteRequest {
-  fixed64 id = 1;
-}
-
 message InstanceGetEventsRequest {
   fixed64 id = 1;
   bool include_logs = 2;
 }
 
 service InstanceService {
-  rpc GetById(InstanceGetByIdRequest) returns (Instance);
+  rpc GetById(Snowflake) returns (Instance);
 
-  rpc Launch(InstanceLaunchRequest) returns (google.protobuf.Empty);
+  rpc GetMany(Pagination) returns (InstanceGetManyResponse);
+  rpc GetByUser(InstanceGetByUserRequest) returns (InstanceGetManyResponse);
+  rpc GetByNode(InstanceGetByNodeRequest) returns (InstanceGetManyResponse);
+
+  rpc Launch(Snowflake) returns (google.protobuf.Empty);
 
   rpc Create(InstanceCreateRequest) returns (Instance);
 
-  rpc Delete(InstanceDeleteRequest) returns (Instance);
+  rpc Delete(Snowflake) returns (Instance);
 }

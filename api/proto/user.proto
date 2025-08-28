@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package manager;
+
+import "google/protobuf/timestamp.proto";
+import "utils.proto";
+
+option go_package = "./pb";
+
+message User {
+  fixed64 id = 1;
+  google.protobuf.Timestamp created_at = 2;
+  google.protobuf.Timestamp updated_at = 3;
+  string username = 4;
+  string first_name = 5;
+  string last_name = 6;
+  string minecraft_user = 7;
+  string email = 8;
+  bool admin = 9;
+  bool two_fa = 10;
+}
+
+message UserGetManyResponse {
+  repeated User users = 1;
+}
+
+message UserCreateRequest {
+  string username = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string minecraft_user = 4;
+  string email = 5;
+  bool admin = 6;
+  bool two_fa = 7;
+  string password = 8;
+}
+
+service UserService {
+  rpc GetById(Snowflake) returns (User);
+
+  rpc GetMany(Pagination) returns (UserGetManyResponse);
+
+  rpc Create(UserCreateRequest) returns (User);
+
+  rpc Delete(Snowflake) returns (User);
+}

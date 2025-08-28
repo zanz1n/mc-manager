@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package manager;
+
+import "google/protobuf/empty.proto";
+import "user.proto";
+
+option go_package = "./pb";
+
+message AuthLoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message AuthLoginResponse {
+  string token = 1;
+  string refresh_token = 2;
+}
+
+message AuthSignupRequest {
+  string username = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string minecraft_user = 4;
+  string email = 5;
+  string password = 6;
+}
+
+message AuthSignupResponse {
+  string token = 1;
+  string refresh_token = 2;
+  User user = 3;
+}
+
+service AuthService {
+  rpc GetSelf(google.protobuf.Empty) returns (User);
+
+  rpc Login(AuthLoginRequest) returns (AuthLoginResponse);
+
+  rpc Signup(AuthSignupRequest) returns (AuthSignupResponse);
+}
