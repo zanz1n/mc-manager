@@ -96,43 +96,9 @@ update: deps
 	$(GO) get -u ./...
 	$(GO) mod tidy
 
-NATIVE_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
-NATIVE_ARCH := $(shell uname -m)
-
-ifeq ($(NATIVE_ARCH), aarch64)
-PROTOC_ARCH := aarch_64
-else
-PROTOC_ARCH := $(NATIVE_ARCH)
-endif
-
-PROTOC := $(TMP)/protoc-$(NATIVE_OS)-$(NATIVE_ARCH)
-
-PROTOC_INCLUDE := -I api/proto -I $(PROTOC)/include
-
-$(PROTOC):
-	$(info Downloading protoc)
-
-	mkdir -p $(PROTOC)
-
-	LATEST=$$(curl \
-	--silent "https://api.github.com/repos/protocolbuffers/protobuf/releases/latest" | \
-	grep '"tag_name":' | \
-	sed -E 's/.*"([^"]+)".*/\1/'); \
-	curl -fsSL -o $(PROTOC).zip \
-	https://github.com/protocolbuffers/protobuf/releases/download/$$LATEST/protoc-$${LATEST:1}-$(NATIVE_OS)-$(PROTOC_ARCH).zip;
-
-	rm -rf $(PROTOC)
-
-	unzip -q $(PROTOC).zip -d $(PROTOC)
-	rm -f $(PROTOC).zip
-
-proto-generate: $(PROTOC)
+proto-generate:
 	rm -f internal/pb/*pb.go
-
-	$(PROTOC)/bin/protoc $(PROTOC_INCLUDE) \
-	--go_out=./internal/pb --go_opt=paths=source_relative \
-	--go-grpc_out=./internal/pb --go-grpc_opt=paths=source_relative \
-	./api/proto/*.proto
+	buf generate
 
 sqlc-generate:
 	find internal/db ! -name '*_conv.go' ! -name '.gitignore' -type f -exec rm -f {} +
@@ -147,8 +113,8 @@ fmt:
 debug:
 	@echo DEBUG = $(DEBUG)
 	@echo DIR = $(DIR)
-	@echo NATIVE_ARCH = $(NATIVE_ARCH)
-	@echo NATIVE_OS = $(NATIVE_OS)
+	@echo ARCH = $(UNAME_ARCH)
+	@echo OS = $(OS)
 	@echo BINNAME = $(PREFIX)%-$(OS)-$(UNAME_ARCH)$(SUFIX)
 	@echo GOMODPATH = $(GOMODPATH)
 	@echo VERSION = $(VERSION)

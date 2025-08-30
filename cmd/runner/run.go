@@ -7,7 +7,9 @@ import (
 	"net"
 	"time"
 
+	"buf.build/go/protovalidate"
 	"github.com/docker/docker/client"
+	protovalidate_middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/protovalidate"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/distribution"
 	"github.com/zanz1n/mc-manager/internal/pb"
@@ -108,6 +110,15 @@ func Serve(
 			),
 		)
 	}
+
+	validator, err := protovalidate.New()
+	if err != nil {
+		panic(err)
+	}
+
+	opts = append(opts, grpc.ChainUnaryInterceptor(
+		protovalidate_middleware.UnaryServerInterceptor(validator),
+	))
 
 	instanceServer := runner.NewServer(manager, distributions)
 

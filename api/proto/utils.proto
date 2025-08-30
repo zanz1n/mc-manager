@@ -2,13 +2,18 @@ syntax = "proto3";
 
 package manager;
 
+import "buf/validate/validate.proto";
+
 option go_package = "./pb";
 
 message Pagination {
-  fixed64 last_seen = 1;
-  int32 limit = 2;
+  fixed64 last_seen = 1 [(buf.validate.field).required = true];
+  int32 limit = 2 [
+    (buf.validate.field).int32.gte = 1,
+    (buf.validate.field).int32.lte = 100
+  ];
 }
 
 message Snowflake {
-  fixed64 id = 1;
+  fixed64 id = 1 [(buf.validate.field).required = true];
 }

@@ -2,14 +2,21 @@ syntax = "proto3";
 
 package manager;
 
+import "buf/validate/validate.proto";
 import "google/protobuf/empty.proto";
 import "user.proto";
 
 option go_package = "./pb";
 
 message AuthLoginRequest {
-  string email = 1;
-  string password = 2;
+  string email = 1 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      email: true
+      max_len: 64
+    }
+  ];
+  string password = 2 [(buf.validate.field).required = true];
 }
 
 message AuthLoginResponse {
@@ -18,12 +25,39 @@ message AuthLoginResponse {
 }
 
 message AuthSignupRequest {
-  string username = 1;
-  string first_name = 2;
-  string last_name = 3;
-  string minecraft_user = 4;
-  string email = 5;
-  string password = 6;
+  string username = 1 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      min_len: 4
+      max_len: 32
+    }
+  ];
+  string first_name = 2 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 32
+    }
+  ];
+  string last_name = 3 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 32
+    }
+  ];
+  string minecraft_user = 4 [(buf.validate.field).string.max_len = 20];
+  string email = 5 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      email: true
+      max_len: 64
+    }
+  ];
+  string password = 6 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string.min_len = 5
+  ];
 }
 
 message AuthSignupResponse {

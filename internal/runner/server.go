@@ -28,7 +28,7 @@ func NewServer(m *Manager, v *distribution.Repository) *Server {
 // GetById implements pb.RunnerServiceServer.
 func (s *Server) GetById(
 	ctx context.Context,
-	req *pb.RunnerGetByIdRequest,
+	req *pb.Snowflake,
 ) (*pb.RunningInstance, error) {
 	i, err := s.m.GetById(ctx, dto.Snowflake(req.Id))
 	if err != nil {
@@ -81,7 +81,7 @@ func (s *Server) Launch(
 // Stop implements pb.RunnerServiceServer.
 func (s *Server) Stop(
 	ctx context.Context,
-	req *pb.RunnerStopRequest,
+	req *pb.Snowflake,
 ) (*pb.RunningInstance, error) {
 	i, err := s.m.GetById(ctx, dto.Snowflake(req.Id))
 	if err != nil {

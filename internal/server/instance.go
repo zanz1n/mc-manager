@@ -64,7 +64,7 @@ func (r *InstanceServer) GetById(
 	}
 
 	state, players := pb.InstanceState_STATE_OFFLINE, int32(0)
-	ri, err := runner.GetStateById(ctx, &pb.RunnerGetByIdRequest{Id: req.Id})
+	ri, err := runner.GetStateById(ctx, &pb.Snowflake{Id: req.Id})
 	if err == nil {
 		state, players = ri.State, ri.Players
 	}
@@ -202,7 +202,7 @@ func (r *InstanceServer) Delete(
 
 		runner, err := r.r.Get(ctx, i.NodeID)
 		if err == nil {
-			runner.Stop(ctx, &pb.RunnerStopRequest{Id: req.Id})
+			runner.Stop(ctx, &pb.Snowflake{Id: req.Id})
 		} else {
 			slog.Error(
 				"InstanceServer: Failed to call node to stop instance",

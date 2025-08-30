@@ -2,11 +2,12 @@ syntax = "proto3";
 
 package manager;
 
+import "buf/validate/validate.proto";
 import "distribution.proto";
 import "events.proto";
-import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 import "instance.proto";
+import "utils.proto";
 
 option go_package = "./pb";
 
@@ -23,52 +24,46 @@ message RunningInstance {
   InstanceState state = 10;
 }
 
-message RunnerGetByIdRequest {
-  fixed64 id = 1;
-}
-
 message RunnerGetStateResponse {
   int32 players = 1;
   InstanceState state = 2;
 }
 
 message RunnerLaunchRequest {
-  fixed64 id = 1;
-  string name = 2;
-  string version = 3;
+  fixed64 id = 1 [(buf.validate.field).required = true];
+  string name = 2 [(buf.validate.field).required = true];
+  string version = 3 [(buf.validate.field).required = true];
   manager.Distribution version_distro = 4;
-  InstanceLimits limits = 5;
-  InstanceConfig config = 6;
-}
-
-message RunnerStopRequest {
-  fixed64 id = 1;
-  google.protobuf.Duration timeout = 2;
+  InstanceLimits limits = 5 [(buf.validate.field).required = true];
+  InstanceConfig config = 6 [(buf.validate.field).required = true];
 }
 
 message RunnerListenRequest {
-  fixed64 instance_id = 1;
+  fixed64 instance_id = 1 [(buf.validate.field).required = true];
   bool include_logs = 2;
 }
 
 message RunnerListenManyRequest {
   bool include_logs = 1;
-  repeated fixed64 instances = 2;
+  repeated fixed64 instances = 2 [
+    (buf.validate.field).repeated.unique = true,
+    (buf.validate.field).repeated.items.required = true
+  ];
 }
 
 message RunnerListenManyResponse {
-  fixed64 instance_id = 1;
-  Event event = 2;
+  fixed64 instance_id = 1 [(buf.validate.field).required = true];
+  Event event = 2 [(buf.validate.field).required = true];
 }
 
 service RunnerService {
-  rpc GetById(RunnerGetByIdRequest) returns (RunningInstance);
+  rpc GetById(Snowflake) returns (RunningInstance);
 
-  rpc GetStateById(RunnerGetByIdRequest) returns (RunnerGetStateResponse);
+  rpc GetStateById(Snowflake) returns (RunnerGetStateResponse);
 
   rpc Launch(RunnerLaunchRequest) returns (RunningInstance);
 
-  rpc Stop(RunnerStopRequest) returns (RunningInstance);
+  rpc Stop(Snowflake) returns (RunningInstance);
 
   rpc Listen(RunnerListenRequest) returns (stream Event);
 

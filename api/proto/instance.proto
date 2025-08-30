@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package manager;
 
+import "buf/validate/validate.proto";
 import "distribution.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
@@ -11,19 +12,59 @@ import "utils.proto";
 option go_package = "./pb";
 
 message InstanceLimits {
-  google.protobuf.Duration shutdown_after_idle = 1;
+  google.protobuf.Duration shutdown_after_idle = 1 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).duration = {
+      gt: {seconds: 60}
+      // 8h
+      lt: {seconds: 28800}
+    }
+  ];
   bool auto_shutdown = 2;
   int32 max_players = 3;
-  uint32 cpu = 4;
-  uint64 ram = 5;
+  uint32 cpu = 4 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).uint32.lt = 128000
+  ];
+  uint64 ram = 5 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).uint64 = {
+      // 128 MiB
+      gt: 134217728
+      // 1 TiB
+      lt: 1099511627776
+    }
+  ];
 }
 
 message InstanceConfig {
-  string difficulty = 1;
-  string admin = 2;
+  string difficulty = 1 [(buf.validate.field).string = {
+    in: [
+      "peaceful",
+      "easy",
+      "normal",
+      "hard"
+    ]
+  }];
+  string admin = 2 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string.max_len = 20
+  ];
   uint32 port = 3;
-  uint32 view_distance = 4;
-  uint32 simulation_distance = 5;
+  uint32 view_distance = 4 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).uint32 = {
+      gte: 2
+      lte: 32
+    }
+  ];
+  uint32 simulation_distance = 5 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).uint32 = {
+      gte: 2
+      lte: 32
+    }
+  ];
   bool allow_pirate = 6;
   bool pvp = 7;
 }
@@ -75,28 +116,40 @@ message InstanceGetManyResponse {
 }
 
 message InstanceGetByUserRequest {
-  fixed64 user_id = 1;
-  Pagination pagination = 2;
+  fixed64 user_id = 1 [(buf.validate.field).required = true];
+  Pagination pagination = 2 [(buf.validate.field).required = true];
 }
 
 message InstanceGetByNodeRequest {
-  fixed64 node_id = 1;
-  Pagination pagination = 2;
+  fixed64 node_id = 1 [(buf.validate.field).required = true];
+  Pagination pagination = 2 [(buf.validate.field).required = true];
 }
 
 message InstanceCreateRequest {
-  fixed64 user_id = 1;
-  fixed64 node_id = 2;
-  string name = 3;
+  fixed64 user_id = 1 [(buf.validate.field).required = true];
+  fixed64 node_id = 2 [(buf.validate.field).required = true];
+  string name = 3 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 128
+    }
+  ];
   string description = 4;
-  string version = 5;
+  string version = 5 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      min_len: 2
+      max_len: 16
+    }
+  ];
   Distribution version_distro = 6;
-  InstanceConfig config = 7;
-  InstanceLimits limits = 8;
+  InstanceConfig config = 7 [(buf.validate.field).required = true];
+  InstanceLimits limits = 8 [(buf.validate.field).required = true];
 }
 
 message InstanceGetEventsRequest {
-  fixed64 id = 1;
+  fixed64 id = 1 [(buf.validate.field).required = true];
   bool include_logs = 2;
 }
 

@@ -8,6 +8,8 @@ import (
 	"net"
 	"time"
 
+	"buf.build/go/protovalidate"
+	protovalidate_middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/protovalidate"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/auth"
 	"github.com/zanz1n/mc-manager/internal/db"
@@ -116,10 +118,16 @@ func Serve(
 		"took", time.Since(start).Round(time.Microsecond),
 	)
 
+	validator, err := protovalidate.New()
+	if err != nil {
+		panic(err)
+	}
+
 	grpcServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			utils.LoggerUnaryServerInterceptor,
 			utils.ErrorUnaryServerInterceptor,
+			protovalidate_middleware.UnaryServerInterceptor(validator),
 		),
 		grpc.ChainStreamInterceptor(
 			utils.LoggerStreamServerInterceptor,
