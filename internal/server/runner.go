@@ -5,13 +5,16 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
 	"github.com/zanz1n/mc-manager/internal/utils"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type runners struct {
@@ -41,8 +44,11 @@ func (r *runners) getSlow(ctx context.Context, id dto.Snowflake) (pb.RunnerServi
 		return nil, err
 	}
 
+	start := time.Now()
+
 	conn, err := grpc.NewClient(
 		fmt.Sprintf("%s:%d", node.Endpoint, node.GrpcPort),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithChainUnaryInterceptor(
 			utils.LoggerUnaryClientInterceptor,
 			utils.AuthUnaryClientInterceptor(node.Token),
@@ -53,8 +59,19 @@ func (r *runners) getSlow(ctx context.Context, id dto.Snowflake) (pb.RunnerServi
 		),
 	)
 	if err != nil {
+		slog.Error(
+			"InstanceServer: Failed to reach node",
+			"id", id,
+			"took", time.Since(start).Round(time.Microsecond),
+			"error", err,
+		)
 		return nil, errors.Join(ErrNodeUnreachable, err)
 	}
+	slog.Info(
+		"InstanceServer: Connected to node",
+		"id", id,
+		"took", time.Since(start).Round(time.Microsecond),
+	)
 
 	s := pb.NewRunnerServiceClient(conn)
 	r.m[id] = s

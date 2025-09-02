@@ -36,10 +36,7 @@ func NewUserServer(
 }
 
 // GetById implements pb.UserServiceServer.
-func (s *UserServer) GetById(
-	ctx context.Context,
-	req *pb.Snowflake,
-) (*pb.User, error) {
+func (s *UserServer) GetById(ctx context.Context, req *pb.Snowflake) (*pb.User, error) {
 	authed, err := s.ar.Authenticate(ctx)
 	if err != nil {
 		return nil, err
@@ -94,10 +91,7 @@ func (s *UserServer) GetMany(
 }
 
 // Create implements pb.UserServiceServer.
-func (s *UserServer) Create(
-	ctx context.Context,
-	req *pb.UserCreateRequest,
-) (*pb.User, error) {
+func (s *UserServer) Create(ctx context.Context, req *pb.UserCreateRequest) (*pb.User, error) {
 	authed, err := s.ar.Authenticate(ctx)
 	if err != nil {
 		return nil, err
@@ -133,10 +127,7 @@ func (s *UserServer) Create(
 }
 
 // Delete implements pb.UserServiceServer.
-func (s *UserServer) Delete(
-	ctx context.Context,
-	req *pb.Snowflake,
-) (*pb.User, error) {
+func (s *UserServer) Delete(ctx context.Context, req *pb.Snowflake) (*pb.User, error) {
 	authed, err := s.ar.Authenticate(ctx)
 	if err != nil {
 		return nil, err

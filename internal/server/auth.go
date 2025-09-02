@@ -47,10 +47,7 @@ func NewAuthServer(
 }
 
 // GetSelf implements pb.AuthServiceServer.
-func (s *AuthServer) GetSelf(
-	ctx context.Context,
-	req *emptypb.Empty,
-) (*pb.User, error) {
+func (s *AuthServer) GetSelf(ctx context.Context, req *emptypb.Empty) (*pb.User, error) {
 	token, err := s.ar.AuthenticateUser(ctx)
 	if err != nil {
 		return nil, err
