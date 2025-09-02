@@ -19,7 +19,7 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-func Run(ctx context.Context, cfg *config.Config) {
+func Run(ctx context.Context, cfg *config.RunnerConfig) {
 	start := time.Now()
 	docker, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
@@ -70,7 +70,7 @@ func Run(ctx context.Context, cfg *config.Config) {
 
 func Serve(
 	ctx context.Context,
-	cfg *config.Config,
+	cfg *config.RunnerConfig,
 	distributions *distribution.Repository,
 	manager *runner.Manager,
 ) {

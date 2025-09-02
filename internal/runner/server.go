@@ -123,7 +123,13 @@ func (s *Server) Listen(
 		"X-Instance-Uptime",
 		time.Since(i.LaunchedAt).Round(time.Second).String(),
 	)
-	md.Set("X-Instance-Players", strconv.Itoa(int(i.Players.Load())))
+
+	var players int32 = 0
+	if i.proxy != nil {
+		players = i.proxy.Players.Load()
+	}
+	md.Set("X-Instance-Players", strconv.Itoa(int(players)))
+
 	stream.SendHeader(md)
 
 	for {

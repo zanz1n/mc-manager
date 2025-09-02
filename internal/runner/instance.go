@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"bytes"
 	"errors"
 	"log/slog"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"github.com/zanz1n/mc-manager/internal/distribution"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
+	"github.com/zanz1n/mc-manager/internal/proxy"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -142,14 +144,15 @@ type Instance struct {
 	LaunchedAt  time.Time
 	Name        string
 
-	Players  atomic.Int32
 	Launched atomic.Bool
 
 	Version distribution.Version
 	Limits  InstanceLimits
 	Config  InstanceConfig
 
-	state atomic.Int32
+	state  atomic.Int32
+	proxy  *proxy.Proxy
+	closed atomic.Bool
 
 	lnLogs map[chan<- Event]struct{}
 	ln     map[chan<- Event]struct{}
@@ -158,12 +161,17 @@ type Instance struct {
 }
 
 func (i *Instance) IntoPB() *pb.RunningInstance {
+	var players int32 = 0
+	if i.proxy != nil {
+		players = i.proxy.Players.Load()
+	}
+
 	return &pb.RunningInstance{
 		Id:          uint64(i.ID),
 		ContainerId: i.ContainerID,
 		LaunchedAt:  timestamppb.New(i.LaunchedAt),
 		Name:        i.Name,
-		Players:     i.Players.Load(),
+		Players:     players,
 		Launched:    i.Launched.Load(),
 		Version:     i.Version.IntoPB(),
 		Limits:      i.Limits.IntoPB(),
@@ -259,7 +267,9 @@ func (i *Instance) SendEvent(e Event) {
 
 func (i *Instance) launch() {
 	i.Launched.Store(true)
+	go i.proxy.Launch()
 	go i.backgroundLogs()
+	go i.loadProxyServerData()
 }
 
 func (i *Instance) setStream(s types.HijackedResponse) {
@@ -269,7 +279,38 @@ func (i *Instance) setStream(s types.HijackedResponse) {
 	i.stream = s
 }
 
+func (i *Instance) loadProxyServerData() {
+	var err error
+	attempts := 0
+
+	for {
+		if i.closed.Load() {
+			slog.Warn(
+				"Instance: Failed to load proxy server data",
+				"attempts", attempts,
+				"last_error", err,
+			)
+			return
+		}
+
+		err = i.proxy.LoadServerData()
+		if err != nil {
+			attempts++
+			time.Sleep(5 * time.Second)
+		} else {
+			break
+		}
+	}
+
+	slog.Info(
+		"Instance: Loaded proxy server data",
+		"attempts", attempts,
+	)
+}
+
 func (i *Instance) backgroundLogs() {
+	available := false
+
 	for {
 		line, _, err := i.stream.Reader.ReadLine()
 		if err != nil {
@@ -277,11 +318,45 @@ func (i *Instance) backgroundLogs() {
 			break
 		}
 
+		if !available {
+			available = i.checkForReadyLog(line)
+		}
+
 		i.SendEvent(Event{Type: pb.EventType_EVENT_LOG, Data: line})
 	}
 }
 
+func (i *Instance) checkForReadyLog(line []byte) (available bool) {
+	if bytes.Contains(line, []byte("INFO]: Done")) {
+		if bytes.Contains(line, []byte("For help, type \"help\"")) {
+			available = true
+
+			i.proxy.Active.Store(true)
+			i.SetState(pb.InstanceState_STATE_RUNNING)
+			i.SendEvent(Event{Type: pb.EventType_EVENT_AVAILABLE})
+
+			slog.Info(
+				"Instance: Minecraft server ready",
+				"id", i.ID,
+				"took", time.Since(i.LaunchedAt).Round(time.Millisecond),
+			)
+		}
+	}
+
+	return
+}
+
 func (i *Instance) close() {
+	if err := i.proxy.Close(); err != nil {
+		slog.Warn(
+			"Instance: Failed to close proxy",
+			"id", i.ID,
+			"error", err,
+		)
+	}
+
+	// i.stream.Close()
+
 	i.mu.Lock()
 	defer i.mu.Unlock()
 

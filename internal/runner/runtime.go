@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
@@ -18,9 +18,9 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	"github.com/docker/go-connections/nat"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/pb"
+	"github.com/zanz1n/mc-manager/internal/proxy"
 )
 
 type Runtime interface {
@@ -42,7 +42,7 @@ type dockerRuntime struct {
 
 func NewDockerRuntime(
 	ctx context.Context,
-	cfg *config.Config,
+	cfg *config.RunnerConfig,
 	docker *client.Client,
 	c *http.Client,
 	java JavaVariant,
@@ -149,7 +149,6 @@ func (r *dockerRuntime) Create(ctx context.Context, instance *Instance) error {
 	}
 
 	containerName := r.dockerPrefix + "-" + instance.ID.String()
-	portStr := strconv.Itoa(int(instance.Config.Port))
 
 	cmd := makeJavaCommand(
 		instance.Version.JVMArgs,
@@ -165,25 +164,14 @@ func (r *dockerRuntime) Create(ctx context.Context, instance *Instance) error {
 			AttachStderr: true,
 			OpenStdin:    true,
 			Tty:          true,
-			// WorkingDir:   "/home/container",
-			WorkingDir: "/game",
-			// User:       "container",
-			// Env:        []string{"USER=container", "HOME=/home/container"},
-			Cmd: cmd,
+			WorkingDir:   "/game",
+			Cmd:          cmd,
 		},
 		&container.HostConfig{
 			AutoRemove: true,
 			Resources: container.Resources{
 				CPUPercent: int64(instance.Limits.CPU),
 				Memory:     int64(instance.Limits.RAM),
-			},
-			PortBindings: nat.PortMap{
-				nat.Port(portStr): []nat.PortBinding{
-					nat.PortBinding{
-						HostIP:   "0.0.0.0",
-						HostPort: portStr,
-					},
-				},
 			},
 			Mounts: []mount.Mount{{
 				Type:   mount.TypeBind,
@@ -193,7 +181,7 @@ func (r *dockerRuntime) Create(ctx context.Context, instance *Instance) error {
 		},
 		&network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
-				r.dockerNetwork: &network.EndpointSettings{
+				r.dockerNetwork: {
 					NetworkID: r.dockerNetworkId,
 				},
 			},
@@ -221,6 +209,33 @@ func (r *dockerRuntime) Launch(ctx context.Context, instance *Instance) error {
 	if err != nil {
 		return errors.Join(ErrInstanceLaunch, err)
 	}
+
+	inspect, err := r.docker.ContainerInspect(ctx, instance.ContainerID)
+	if err != nil {
+		return errors.Join(ErrInstanceLaunch, err)
+	}
+
+	nw, ok := inspect.NetworkSettings.Networks[r.dockerNetwork]
+	if !ok {
+		return errors.Join(
+			ErrInstanceLaunch,
+			errors.New("container not attached to network"),
+		)
+	}
+
+	proxy, err := proxy.New(
+		instance.Limits.MaxPlayers,
+		instance.ID,
+		net.TCPAddr{
+			IP:   net.ParseIP(nw.IPAddress),
+			Port: int(instance.Config.Port),
+		},
+	)
+	if err != nil {
+		return errors.Join(ErrInstanceLaunch, err)
+	}
+
+	instance.proxy = proxy
 
 	res, err := r.docker.ContainerAttach(ctx, instance.ContainerID, container.AttachOptions{
 		Stream: true,

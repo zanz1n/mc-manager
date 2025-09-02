@@ -29,12 +29,12 @@ func main() {
 	endCh := make(chan os.Signal, 1)
 	signal.Notify(endCh, syscall.SIGINT, syscall.SIGTERM)
 
-	cfg, err := config.GetConfig(*configFile)
+	cfg, err := config.GetRunnerConfig(*configFile)
 	if err != nil {
 		log.Fatalln("Failed to get config:", err)
 	}
 
-	err = config.WriteConfig(*configFile, cfg)
+	err = config.WriteRunnerConfig(*configFile, cfg)
 	if err != nil {
 		log.Fatalln("Failed to format config:", err)
 	}
