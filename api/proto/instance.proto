@@ -171,6 +171,8 @@ service InstanceService {
 
   rpc Launch(Snowflake) returns (google.protobuf.Empty);
 
+  rpc Stop(Snowflake) returns (google.protobuf.Empty);
+
   rpc Create(InstanceCreateRequest) returns (Instance);
 
   rpc SendCommand(InstanceSendCommandRequest) returns (google.protobuf.Empty);

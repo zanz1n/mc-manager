@@ -38,15 +38,11 @@ func NewInstanceServer(db db.Querier, ar *auth.Respository) *InstanceServer {
 }
 
 // GetById implements pb.InstanceServiceServer.
-func (s *InstanceServer) GetById(
-	ctx context.Context,
-	req *pb.Snowflake,
-) (*pb.Instance, error) {
+func (s *InstanceServer) GetById(ctx context.Context, req *pb.Snowflake) (*pb.Instance, error) {
 	authed, err := s.ar.Authenticate(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	id := dto.Snowflake(req.Id)
 
 	i, err := s.instanceGetById(ctx, id)
@@ -99,15 +95,11 @@ func (s *InstanceServer) GetById(
 // }
 
 // Launch implements pb.InstanceServiceServer.
-func (s *InstanceServer) Launch(
-	ctx context.Context,
-	req *pb.Snowflake,
-) (*emptypb.Empty, error) {
+func (s *InstanceServer) Launch(ctx context.Context, req *pb.Snowflake) (*emptypb.Empty, error) {
 	authed, err := s.ar.Authenticate(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	id := dto.Snowflake(req.Id)
 
 	i, err := s.instanceGetById(ctx, id)
@@ -138,6 +130,46 @@ func (s *InstanceServer) Launch(
 		return nil, err
 	}
 
+	if err = s.db.InstanceUpdateLastLaunched(ctx, id); err != nil {
+		slog.Error(
+			"InstanceServer: Failed to update `last_launched`",
+			"id", id,
+			"error", err,
+		)
+	}
+
+	return &emptypb.Empty{}, nil
+}
+
+// Stop implements pb.InstanceServiceServer.
+func (s *InstanceServer) Stop(ctx context.Context, req *pb.Snowflake) (*emptypb.Empty, error) {
+	authed, err := s.ar.Authenticate(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id := dto.Snowflake(req.Id)
+
+	i, err := s.instanceGetById(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if !authed.IsAdmin() {
+		if authed.GetId() != i.UserID {
+			return nil, ErrPermissionDenied
+		}
+	}
+
+	runner, err := s.r.Get(ctx, i.NodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = runner.Stop(ctx, &pb.Snowflake{Id: req.Id})
+	if err != nil {
+		return nil, err
+	}
+
 	return &emptypb.Empty{}, nil
 }
 
@@ -154,7 +186,6 @@ func (s *InstanceServer) Create(
 	if !authed.IsAdmin() {
 		return nil, ErrPermissionDenied
 	}
-
 	id := dto.NewSnowflake()
 
 	i, err := s.db.InstanceCreate(ctx, db.InstanceCreateParams{
@@ -263,10 +294,7 @@ func (s *InstanceServer) GetEvents(
 }
 
 // Delete implements pb.InstanceServiceServer.
-func (s *InstanceServer) Delete(
-	ctx context.Context,
-	req *pb.Snowflake,
-) (*pb.Instance, error) {
+func (s *InstanceServer) Delete(ctx context.Context, req *pb.Snowflake) (*pb.Instance, error) {
 	authed, err := s.ar.Authenticate(ctx)
 	if err != nil {
 		return nil, err
