@@ -13,7 +13,7 @@ option go_package = "./pb";
 
 message InstanceLimits {
   google.protobuf.Duration shutdown_after_idle = 1 [
-    (buf.validate.field).required = true,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
     (buf.validate.field).duration = {
       gt: {seconds: 60}
       // 8h
@@ -38,28 +38,31 @@ message InstanceLimits {
 }
 
 message InstanceConfig {
-  string difficulty = 1 [(buf.validate.field).string = {
-    in: [
-      "peaceful",
-      "easy",
-      "normal",
-      "hard"
-    ]
-  }];
+  string difficulty = 1 [
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string = {
+      in: [
+        "peaceful",
+        "easy",
+        "normal",
+        "hard"
+      ]
+    }
+  ];
   string admin = 2 [
     (buf.validate.field).required = true,
     (buf.validate.field).string.max_len = 20
   ];
   uint32 port = 3;
   uint32 view_distance = 4 [
-    (buf.validate.field).required = true,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
     (buf.validate.field).uint32 = {
       gte: 2
       lte: 32
     }
   ];
   uint32 simulation_distance = 5 [
-    (buf.validate.field).required = true,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
     (buf.validate.field).uint32 = {
       gte: 2
       lte: 32
