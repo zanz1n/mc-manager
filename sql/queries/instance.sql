@@ -39,5 +39,8 @@ UPDATE instances SET
 WHERE id = $1
 RETURNING *;
 
+-- name: InstanceUpdateLastLaunched :exec
+UPDATE instances SET last_launched = now() WHERE id = $1;
+
 -- name: InstanceDelete :one
 DELETE FROM instances WHERE id = $1 RETURNING *;
