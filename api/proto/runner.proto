@@ -5,6 +5,7 @@ package manager;
 import "buf/validate/validate.proto";
 import "distribution.proto";
 import "events.proto";
+import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 import "instance.proto";
 import "utils.proto";
@@ -38,6 +39,11 @@ message RunnerLaunchRequest {
   InstanceConfig config = 6 [(buf.validate.field).required = true];
 }
 
+message RunnerSendCommandRequest {
+  fixed64 instance_id = 1 [(buf.validate.field).required = true];
+  string command = 2 [(buf.validate.field).required = true];
+}
+
 message RunnerListenRequest {
   fixed64 instance_id = 1 [(buf.validate.field).required = true];
   bool include_logs = 2;
@@ -62,6 +68,8 @@ service RunnerService {
   rpc GetStateById(Snowflake) returns (RunnerGetStateResponse);
 
   rpc Launch(RunnerLaunchRequest) returns (RunningInstance);
+
+  rpc SendCommand(RunnerSendCommandRequest) returns (google.protobuf.Empty);
 
   rpc Stop(Snowflake) returns (RunningInstance);
 

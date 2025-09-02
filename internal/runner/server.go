@@ -11,6 +11,7 @@ import (
 	"github.com/zanz1n/mc-manager/internal/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 var _ pb.RunnerServiceServer = (*Server)(nil)
@@ -36,6 +37,27 @@ func (s *Server) GetById(
 	}
 
 	return i.IntoPB(), nil
+}
+
+// GetStateById implements pb.RunnerServiceServer.
+func (s *Server) GetStateById(
+	ctx context.Context,
+	req *pb.Snowflake,
+) (*pb.RunnerGetStateResponse, error) {
+	i, err := s.m.GetById(ctx, dto.Snowflake(req.Id))
+	if err != nil {
+		return nil, err
+	}
+
+	var players int32 = 0
+	if i.proxy != nil {
+		players = i.proxy.Players.Load()
+	}
+
+	return &pb.RunnerGetStateResponse{
+		Players: players,
+		State:   i.GetState(),
+	}, nil
 }
 
 // Launch implements pb.RunnerServiceServer.
@@ -95,6 +117,22 @@ func (s *Server) Stop(
 	}
 
 	return i.IntoPB(), nil
+}
+
+// SendCommand implements pb.RunnerServiceServer.
+func (s *Server) SendCommand(
+	ctx context.Context,
+	req *pb.RunnerSendCommandRequest,
+) (*emptypb.Empty, error) {
+	i, err := s.m.GetById(ctx, dto.Snowflake(req.InstanceId))
+	if err != nil {
+		return nil, err
+	}
+
+	if err = i.SendCommand(req.Command); err != nil {
+		return nil, err
+	}
+	return &emptypb.Empty{}, nil
 }
 
 // Listen implements pb.RunnerServiceServer.

@@ -4,6 +4,7 @@ package manager;
 
 import "buf/validate/validate.proto";
 import "distribution.proto";
+import "events.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
@@ -151,6 +152,11 @@ message InstanceCreateRequest {
   InstanceLimits limits = 8 [(buf.validate.field).required = true];
 }
 
+message InstanceSendCommandRequest {
+  fixed64 instance_id = 1 [(buf.validate.field).required = true];
+  string command = 2 [(buf.validate.field).required = true];
+}
+
 message InstanceGetEventsRequest {
   fixed64 id = 1 [(buf.validate.field).required = true];
   bool include_logs = 2;
@@ -166,6 +172,10 @@ service InstanceService {
   rpc Launch(Snowflake) returns (google.protobuf.Empty);
 
   rpc Create(InstanceCreateRequest) returns (Instance);
+
+  rpc SendCommand(InstanceSendCommandRequest) returns (google.protobuf.Empty);
+
+  rpc GetEvents(InstanceGetEventsRequest) returns (stream Event);
 
   rpc Delete(Snowflake) returns (Instance);
 }

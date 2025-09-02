@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"log/slog"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -36,18 +38,18 @@ func NewInstanceServer(db db.Querier, ar *auth.Respository) *InstanceServer {
 }
 
 // GetById implements pb.InstanceServiceServer.
-func (r *InstanceServer) GetById(
+func (s *InstanceServer) GetById(
 	ctx context.Context,
 	req *pb.Snowflake,
 ) (*pb.Instance, error) {
-	authed, err := r.ar.Authenticate(ctx)
+	authed, err := s.ar.Authenticate(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	id := dto.Snowflake(req.Id)
 
-	i, err := r.instanceGetById(ctx, id)
+	i, err := s.instanceGetById(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +60,7 @@ func (r *InstanceServer) GetById(
 		}
 	}
 
-	runner, err := r.r.Get(ctx, i.NodeID)
+	runner, err := s.r.Get(ctx, i.NodeID)
 	if err != nil {
 		return nil, err
 	}
@@ -97,18 +99,18 @@ func (r *InstanceServer) GetById(
 // }
 
 // Launch implements pb.InstanceServiceServer.
-func (r *InstanceServer) Launch(
+func (s *InstanceServer) Launch(
 	ctx context.Context,
 	req *pb.Snowflake,
 ) (*emptypb.Empty, error) {
-	authed, err := r.ar.Authenticate(ctx)
+	authed, err := s.ar.Authenticate(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	id := dto.Snowflake(req.Id)
 
-	i, err := r.instanceGetById(ctx, id)
+	i, err := s.instanceGetById(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +121,7 @@ func (r *InstanceServer) Launch(
 		}
 	}
 
-	runner, err := r.r.Get(ctx, i.NodeID)
+	runner, err := s.r.Get(ctx, i.NodeID)
 	if err != nil {
 		return nil, err
 	}
@@ -140,11 +142,11 @@ func (r *InstanceServer) Launch(
 }
 
 // Create implements pb.InstanceServiceServer.
-func (r *InstanceServer) Create(
+func (s *InstanceServer) Create(
 	ctx context.Context,
 	req *pb.InstanceCreateRequest,
 ) (*pb.Instance, error) {
-	authed, err := r.ar.Authenticate(ctx)
+	authed, err := s.ar.Authenticate(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +157,7 @@ func (r *InstanceServer) Create(
 
 	id := dto.NewSnowflake()
 
-	i, err := r.db.InstanceCreate(ctx, db.InstanceCreateParams{
+	i, err := s.db.InstanceCreate(ctx, db.InstanceCreateParams{
 		ID:            id,
 		UserID:        dto.Snowflake(req.UserId),
 		NodeID:        dto.Snowflake(req.NodeId),
@@ -173,12 +175,99 @@ func (r *InstanceServer) Create(
 	return i.IntoPB(pb.InstanceState_STATE_OFFLINE, 0), nil
 }
 
+// SendCommand implements pb.InstanceServiceServer.
+func (s *InstanceServer) SendCommand(
+	ctx context.Context,
+	req *pb.InstanceSendCommandRequest,
+) (*emptypb.Empty, error) {
+	authed, err := s.ar.Authenticate(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	i, err := s.instanceGetById(ctx, dto.Snowflake(req.InstanceId))
+	if err != nil {
+		return nil, err
+	}
+
+	if !authed.IsAdmin() {
+		if authed.GetId() != i.UserID {
+			return nil, ErrPermissionDenied
+		}
+	}
+
+	runner, err := s.r.Get(ctx, i.NodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = runner.SendCommand(ctx, &pb.RunnerSendCommandRequest{
+		InstanceId: req.InstanceId,
+		Command:    req.Command,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &emptypb.Empty{}, nil
+}
+
+// GetEvents implements pb.InstanceServiceServer.
+func (s *InstanceServer) GetEvents(
+	req *pb.InstanceGetEventsRequest,
+	stream grpc.ServerStreamingServer[pb.Event],
+) error {
+	ctx := stream.Context()
+
+	authed, err := s.ar.Authenticate(ctx)
+	if err != nil {
+		return err
+	}
+
+	i, err := s.instanceGetById(ctx, dto.Snowflake(req.Id))
+	if err != nil {
+		return err
+	}
+
+	if !authed.IsAdmin() {
+		if authed.GetId() != i.UserID {
+			return ErrPermissionDenied
+		}
+	}
+
+	runner, err := s.r.Get(ctx, i.NodeID)
+	if err != nil {
+		return err
+	}
+
+	res, err := runner.Listen(ctx, &pb.RunnerListenRequest{
+		InstanceId:  req.Id,
+		IncludeLogs: req.IncludeLogs,
+	})
+	if err != nil {
+		return err
+	}
+
+	for {
+		event, err := res.Recv()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+
+		if err = stream.Send(event); err != nil {
+			return err
+		}
+	}
+}
+
 // Delete implements pb.InstanceServiceServer.
-func (r *InstanceServer) Delete(
+func (s *InstanceServer) Delete(
 	ctx context.Context,
 	req *pb.Snowflake,
 ) (*pb.Instance, error) {
-	authed, err := r.ar.Authenticate(ctx)
+	authed, err := s.ar.Authenticate(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +278,7 @@ func (r *InstanceServer) Delete(
 
 	id := dto.Snowflake(req.Id)
 
-	i, err := r.db.InstanceDelete(ctx, id)
+	i, err := s.db.InstanceDelete(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = errors.Join(ErrInstanceNotFound, errors.New(id.String()))
@@ -200,7 +289,7 @@ func (r *InstanceServer) Delete(
 	go func() {
 		start := time.Now()
 
-		runner, err := r.r.Get(ctx, i.NodeID)
+		runner, err := s.r.Get(ctx, i.NodeID)
 		if err == nil {
 			runner.Stop(ctx, &pb.Snowflake{Id: req.Id})
 		} else {
@@ -216,11 +305,11 @@ func (r *InstanceServer) Delete(
 	return i.IntoPB(pb.InstanceState_STATE_OFFLINE, 0), nil
 }
 
-func (r *InstanceServer) instanceGetById(
+func (s *InstanceServer) instanceGetById(
 	ctx context.Context,
 	id dto.Snowflake,
 ) (db.Instance, error) {
-	i, err := r.db.InstanceGetById(ctx, id)
+	i, err := s.db.InstanceGetById(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = errors.Join(ErrInstanceNotFound, errors.New(id.String()))
