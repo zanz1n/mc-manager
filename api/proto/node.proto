@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package manager;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+import "utils.proto";
+
+message Node {
+  fixed64 id = 1;
+  google.protobuf.Timestamp created_at = 2;
+  google.protobuf.Timestamp updated_at = 3;
+  string name = 4;
+  string description = 5;
+  bool maintenance = 6;
+  string token = 7;
+  string endpoint = 8;
+  bool endpoint_tls = 9;
+  int32 ftp_port = 10;
+  int32 grpc_port = 11;
+}
+
+message NodeGetManyResponse {
+  repeated Node nodes = 1;
+}
+
+message NodeCreateRequest {
+  string name = 1 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 128
+    }
+  ];
+  string description = 2;
+  string token = 3 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 128
+    }
+  ];
+  string endpoint = 4 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      address: true
+      min_len: 1
+      max_len: 128
+    }
+  ];
+  bool endpoint_tls = 5;
+  uint32 ftp_port = 6 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).uint32 = {
+      gte: 1
+      lte: 65535
+    }
+  ];
+  uint32 grpc_port = 7 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).uint32 = {
+      gte: 1
+      lte: 65535
+    }
+  ];
+}
+
+service NodeService {
+  rpc GetById(Snowflake) returns (Node);
+
+  rpc GetMany(Pagination) returns (NodeGetManyResponse);
+
+  rpc Create(NodeCreateRequest) returns (Node);
+
+  rpc Delete(Snowflake) returns (Node);
+}

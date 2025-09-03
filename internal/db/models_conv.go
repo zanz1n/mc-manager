@@ -20,6 +20,22 @@ func (u *User) IntoPB() *pb.User {
 	}
 }
 
+func (n *Node) IntoPB() *pb.Node {
+	return &pb.Node{
+		Id:          uint64(n.ID),
+		CreatedAt:   timestamppb.New(n.CreatedAt),
+		UpdatedAt:   timestamppb.New(n.UpdatedAt),
+		Name:        n.Name,
+		Description: n.Description,
+		Maintenance: n.Maintenance,
+		Token:       n.Token,
+		Endpoint:    n.Endpoint,
+		EndpointTls: n.EndpointTls,
+		FtpPort:     n.FtpPort,
+		GrpcPort:    n.GrpcPort,
+	}
+}
+
 func (i *Instance) IntoPB(state pb.InstanceState, players int32) *pb.Instance {
 	ll := (*timestamppb.Timestamp)(nil)
 	if i.LastLaunched.Valid {
