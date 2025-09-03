@@ -54,7 +54,8 @@ func Run(ctx context.Context, cfg *config.RunnerConfig) {
 
 	runtime, err := runner.NewDockerRuntime(
 		context.Background(),
-		cfg,
+		cfg.Docker,
+		cfg.Data,
 		docker,
 		nil,
 		runner.NewTemurinJre("noble"),

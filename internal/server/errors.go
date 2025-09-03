@@ -21,6 +21,11 @@ var (
 		"node is unreachable",
 	)
 
+	ErrLocalNodeUndeletable = status.Error(
+		codes.PermissionDenied,
+		"local node can not be deleted",
+	)
+
 	ErrPermissionDenied = status.Error(
 		codes.PermissionDenied,
 		"permission denied",

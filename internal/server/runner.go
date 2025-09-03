@@ -17,14 +17,28 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type runners struct {
+type Runners struct {
 	db db.Querier
 
 	m  map[dto.Snowflake]pb.RunnerServiceClient
 	mu sync.Mutex
 }
 
-func (r *runners) Get(ctx context.Context, id dto.Snowflake) (pb.RunnerServiceClient, error) {
+func NewRunners(db db.Querier) *Runners {
+	return &Runners{
+		db: db,
+		m:  make(map[dto.Snowflake]pb.RunnerServiceClient),
+	}
+}
+
+func (r *Runners) AddRunner(id dto.Snowflake, s pb.RunnerServiceClient) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.m[id] = s
+}
+
+func (r *Runners) Get(ctx context.Context, id dto.Snowflake) (pb.RunnerServiceClient, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -35,7 +49,7 @@ func (r *runners) Get(ctx context.Context, id dto.Snowflake) (pb.RunnerServiceCl
 	return r.getSlow(ctx, id)
 }
 
-func (r *runners) getSlow(ctx context.Context, id dto.Snowflake) (pb.RunnerServiceClient, error) {
+func (r *Runners) getSlow(ctx context.Context, id dto.Snowflake) (pb.RunnerServiceClient, error) {
 	node, err := r.db.NodeGetById(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

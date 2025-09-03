@@ -42,7 +42,8 @@ type dockerRuntime struct {
 
 func NewDockerRuntime(
 	ctx context.Context,
-	cfg *config.RunnerConfig,
+	dockerCfg config.DockerConfig,
+	dataCfg config.DataConfig,
 	docker *client.Client,
 	c *http.Client,
 	java JavaVariant,
@@ -51,14 +52,14 @@ func NewDockerRuntime(
 		c = http.DefaultClient
 	}
 
-	dir, err := filepath.Abs(cfg.Data.DataDir)
+	dir, err := filepath.Abs(dataCfg.DataDir)
 	if err != nil {
 		return nil, err
 	}
 
 	r := &dockerRuntime{
-		dockerPrefix:  cfg.Docker.Prefix,
-		dockerNetwork: cfg.Docker.NetworkName,
+		dockerPrefix:  dockerCfg.Prefix,
+		dockerNetwork: dockerCfg.NetworkName,
 		dir:           dir,
 		docker:        docker,
 		java:          java,
@@ -85,17 +86,26 @@ func (r *dockerRuntime) createNetwork(ctx context.Context) error {
 			)
 			return err
 		}
+
+		nwid := nw.ID
+		if len(nwid) > 12 {
+			nwid = nwid[0:12]
+		}
 		slog.Info(
 			"DockerRunner: Created network",
 			"name", r.dockerNetwork,
-			"id", nw.ID,
+			"id", nwid,
 		)
 		r.dockerNetworkId = nw.ID
 	} else {
+		nwid := nw.ID
+		if len(nwid) > 12 {
+			nwid = nwid[0:12]
+		}
 		slog.Info(
 			"DockerRunner: Network fetched",
 			"name", r.dockerNetwork,
-			"id", nw.ID,
+			"id", nwid,
 		)
 		r.dockerNetworkId = nw.ID
 	}

@@ -21,19 +21,16 @@ var _ pb.InstanceServiceServer = (*InstanceServer)(nil)
 type InstanceServer struct {
 	db db.Querier
 	ar *auth.Respository
-	r  runners
+	r  *Runners
 
 	pb.UnimplementedInstanceServiceServer
 }
 
-func NewInstanceServer(db db.Querier, ar *auth.Respository) *InstanceServer {
+func NewInstanceServer(db db.Querier, ar *auth.Respository, r *Runners) *InstanceServer {
 	return &InstanceServer{
 		db: db,
 		ar: ar,
-		r: runners{
-			db: db,
-			m:  make(map[dto.Snowflake]pb.RunnerServiceClient),
-		},
+		r:  r,
 	}
 }
 

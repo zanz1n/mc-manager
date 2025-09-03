@@ -14,6 +14,7 @@ import (
 	"github.com/zanz1n/mc-manager/internal/auth"
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/distribution"
+	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
 	"github.com/zanz1n/mc-manager/internal/server"
 	"github.com/zanz1n/mc-manager/internal/utils"
@@ -85,6 +86,16 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 		distribution.NewVanilla(nil),
 	)
 
+	runners := server.NewRunners(querier)
+
+	if cfg.LocalNode != nil && cfg.LocalNode.Enable {
+		r, err := RunLocalNode(ctx, cfg.LocalNode, distroRepo)
+		if err != nil {
+			log.Fatalln("Failed to run local node:", err)
+		}
+		runners.AddRunner(cfg.LocalNode.ID, r)
+	}
+
 	Serve(
 		ctx,
 		cfg,
@@ -92,6 +103,7 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 		auther,
 		authRepo,
 		distroRepo,
+		runners,
 	)
 }
 
@@ -102,6 +114,7 @@ func Serve(
 	auther auth.Auther,
 	authRepo *auth.Respository,
 	distroRepo *distribution.Repository,
+	runners *server.Runners,
 ) {
 	start := time.Now()
 	ln, err := net.ListenTCP("tcp", &net.TCPAddr{
@@ -135,6 +148,11 @@ func Serve(
 		),
 	)
 
+	var localNodeId dto.Snowflake
+	if cfg.LocalNode != nil {
+		localNodeId = cfg.LocalNode.ID
+	}
+
 	pb.RegisterAuthServiceServer(
 		grpcServer,
 		server.NewAuthServer(querier, auther, authRepo, cfg),
@@ -143,9 +161,13 @@ func Serve(
 		grpcServer,
 		server.NewUserServer(querier, authRepo, cfg),
 	)
+	pb.RegisterNodeServiceServer(
+		grpcServer,
+		server.NewNodeServer(querier, authRepo, localNodeId),
+	)
 	pb.RegisterInstanceServiceServer(
 		grpcServer,
-		server.NewInstanceServer(querier, authRepo),
+		server.NewInstanceServer(querier, authRepo, runners),
 	)
 	pb.RegisterDistributionServiceServer(
 		grpcServer,

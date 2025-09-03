@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/zanz1n/mc-manager/config"
+	"github.com/zanz1n/mc-manager/internal/dto"
 )
 
 var (
@@ -39,6 +40,12 @@ func main() {
 	cfg, err := config.GetApiConfig(*configFile)
 	if err != nil {
 		log.Fatalln("Failed to get config:", err)
+	}
+
+	if cfg.LocalNode != nil {
+		if cfg.LocalNode.ID == 0 {
+			cfg.LocalNode.ID = dto.NewSnowflake()
+		}
 	}
 
 	err = config.WriteApiConfig(*configFile, cfg)
