@@ -89,7 +89,7 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 	runners := server.NewRunners(querier)
 
 	if cfg.LocalNode != nil && cfg.LocalNode.Enable {
-		r, err := RunLocalNode(ctx, cfg.LocalNode, distroRepo)
+		r, err := RunLocalNode(ctx, cfg.LocalNode, distroRepo, querier)
 		if err != nil {
 			log.Fatalln("Failed to run local node:", err)
 		}

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/zanz1n/mc-manager/config"
+	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/distribution"
 	"github.com/zanz1n/mc-manager/internal/pb"
 	"github.com/zanz1n/mc-manager/internal/runner"
@@ -21,7 +24,32 @@ func RunLocalNode(
 	ctx context.Context,
 	cfg *config.APILocalNodeConfig,
 	distros *distribution.Repository,
+	queries db.Querier,
 ) (pb.RunnerServiceClient, error) {
+	_, err := queries.NodeGetById(ctx, cfg.ID)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+
+		_, err = queries.NodeCreate(ctx, db.NodeCreateParams{
+			ID:       cfg.ID,
+			Name:     "Local Node",
+			Endpoint: "passthrough://bufnet",
+		})
+	} else {
+		_, err = queries.NodeUpdate(ctx, db.NodeUpdateParams{
+			ID:       cfg.ID,
+			Name:     "Local Node",
+			Endpoint: "passthrough://bufnet",
+		})
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	slog.Info("LocalNode: Created local node", "id", cfg.ID)
+
 	start := time.Now()
 
 	docker, err := client.NewClientWithOpts(client.FromEnv)

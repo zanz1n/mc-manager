@@ -4,13 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 
 	"github.com/zanz1n/mc-manager/internal/auth"
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var _ pb.NodeServiceServer = (*NodeServer)(nil)
@@ -41,12 +39,8 @@ func (s *NodeServer) GetById(ctx context.Context, req *pb.Snowflake) (*pb.Node, 
 	if !authed.IsAdmin() {
 		return nil, ErrPermissionDenied
 	}
-
-	if req.Id == uint64(s.localNodeId) {
-		return s.localNodeInformation(), nil
-	}
-
 	id := dto.Snowflake(req.Id)
+
 	node, err := s.db.NodeGetById(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -141,22 +135,4 @@ func (s *NodeServer) Delete(ctx context.Context, req *pb.Snowflake) (*pb.Node, e
 	}
 
 	return node.IntoPB(), nil
-}
-
-func (s *NodeServer) localNodeInformation() *pb.Node {
-	now := time.Now()
-
-	return &pb.Node{
-		Id:          uint64(s.localNodeId),
-		CreatedAt:   timestamppb.New(now),
-		UpdatedAt:   timestamppb.New(now),
-		Name:        "Local Node",
-		Description: "",
-		Maintenance: false,
-		Token:       "",
-		Endpoint:    "localhost",
-		EndpointTls: false,
-		FtpPort:     0,
-		GrpcPort:    0,
-	}
 }
