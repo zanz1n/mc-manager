@@ -1,0 +1,75 @@
+configs:
+  api-config:
+    content: |
+      name: ""
+
+      server:
+        ip: 0.0.0.0
+        port: 8080
+        password: strongpassword123
+        enable-reflection: true
+
+      auth:
+        jwt-expiration: 1h0m0s
+        allow-signup: true
+        bcrypt-cost: 12
+        private-key: /etc/mc/jwt-priv.pem
+        public-key: /etc/mc/jwt-pub.pem
+
+      db:
+        url: postgres://postgres:docker@postgres:5432/mc
+        max-conns: 10
+        skip-preparation: false
+        migrate: true
+
+      redis:
+        url: redis://redis:6379
+
+      runner:
+        enable: true
+        id: "1411133174233402605"
+        docker:
+          prefix: mc
+          network-name: mc_network
+        data:
+          data-dir: /data
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api.dockerfile
+    command: ["--config", "/api-config.yaml"]
+    ports:
+      - 8080:8080
+    volumes:
+      - ./data/data:/data
+      - ./data/etc:/etc/mc
+      - /var/run/docker.sock:/var/run/docker.sock
+    configs:
+      - source: api-config
+        target: /api-config.yaml
+    links:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mc
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: docker
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+  redis:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command: ["--save", "60", "1"]
+    volumes:
+      - ./data/redis:/data
+
+networks:
+  default:
+    driver: bridge
