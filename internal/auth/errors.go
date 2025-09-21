@@ -1,28 +1,28 @@
 package auth
 
 import (
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"connectrpc.com/connect"
+	"github.com/zanz1n/mc-manager/internal/utils"
 )
 
 var (
-	ErrExpiredAuthToken = status.Error(
-		codes.Unauthenticated,
+	ErrExpiredAuthToken = utils.Error(
+		connect.CodeUnauthenticated,
 		"authentication token expired",
 	)
 
-	ErrInvalidAuthToken = status.Error(
-		codes.Unauthenticated,
+	ErrInvalidAuthToken = utils.Error(
+		connect.CodeUnauthenticated,
 		"authentication token is invalid or was not provided",
 	)
 
-	ErrInvalidRefreshToken = status.Error(
-		codes.Unauthenticated,
+	ErrInvalidRefreshToken = utils.Error(
+		connect.CodeUnauthenticated,
 		"refresh token invalid",
 	)
 
-	ErrUserNotFound = status.Error(
-		codes.NotFound,
+	ErrUserNotFound = utils.Error(
+		connect.CodeNotFound,
 		"user not found",
 	)
 )

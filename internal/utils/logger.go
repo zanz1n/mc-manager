@@ -5,144 +5,104 @@ import (
 	"log/slog"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"connectrpc.com/connect"
 )
 
-func LoggerUnaryServerInterceptor(
-	ctx context.Context,
-	req any,
-	info *grpc.UnaryServerInfo,
-	handler grpc.UnaryHandler,
-) (any, error) {
-	start := time.Now()
+type loggerInterceptor struct{}
 
-	res, err := handler(ctx, req)
-	took := time.Since(start).Round(time.Microsecond)
+func NewLoggerInterceptor() connect.Interceptor {
+	return &loggerInterceptor{}
+}
 
-	if err != nil {
-		s := status.Convert(err)
+// WrapUnary implements connect.Interceptor.
+func (l *loggerInterceptor) WrapUnary(handler connect.UnaryFunc) connect.UnaryFunc {
+	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+		start := time.Now()
 
-		if s != nil {
+		res, err := handler(ctx, req)
+		took := time.Since(start).Round(time.Microsecond)
+
+		if err != nil {
+			s, ok := err.(*connect.Error)
+
+			if ok {
+				slog.Info(
+					"GRPC: Handled unary call",
+					"method", req.HTTPMethod(),
+					"code", s.Code(),
+					"took", took,
+				)
+			} else {
+				slog.Info(
+					"GRPC: Handled unary call with error",
+					"method", req.HTTPMethod(),
+					"took", took,
+					"error", err,
+				)
+			}
+
+		} else {
 			slog.Info(
 				"GRPC: Handled unary call",
-				"method", info.FullMethod,
-				"code", s.Code(),
+				"method", req.HTTPMethod(),
+				"code", "ok",
 				"took", took,
-			)
-		} else {
-			slog.Info(
-				"GRPC: Handled unary call with error",
-				"method", info.FullMethod,
-				"took", took,
-				"error", err,
 			)
 		}
 
-	} else {
-		slog.Info(
-			"GRPC: Handled unary call",
-			"method", info.FullMethod,
-			"code", codes.OK,
-			"took", took,
-		)
+		return res, err
 	}
-
-	return res, err
 }
 
-func LoggerStreamServerInterceptor(
-	srv any,
-	ss grpc.ServerStream,
-	info *grpc.StreamServerInfo,
-	handler grpc.StreamHandler,
-) error {
-	start := time.Now()
+// WrapStreamingClient implements connect.Interceptor.
+func (l *loggerInterceptor) WrapStreamingClient(
+	handler connect.StreamingClientFunc,
+) connect.StreamingClientFunc {
+	return handler
+}
 
-	err := handler(srv, ss)
-	took := time.Since(start).Round(time.Microsecond)
+// WrapStreamingHandler implements connect.Interceptor.
+func (l *loggerInterceptor) WrapStreamingHandler(
+	handler connect.StreamingHandlerFunc,
+) connect.StreamingHandlerFunc {
+	return func(ctx context.Context, shc connect.StreamingHandlerConn) error {
+		start := time.Now()
 
-	if err != nil {
-		s := status.Convert(err)
+		err := handler(ctx, shc)
+		took := time.Since(start).Round(time.Microsecond)
 
-		if s != nil {
+		spec := shc.Spec()
+
+		if err != nil {
+			s, ok := err.(*connect.Error)
+
+			if ok {
+				slog.Info(
+					"GRPC: Handled stream call",
+					"method", spec.Procedure,
+					"stream_type", spec.StreamType,
+					"code", s.Code(),
+					"took", took,
+				)
+			} else {
+				slog.Info(
+					"GRPC: Handled stream call with error",
+					"method", spec.Procedure,
+					"stream_type", spec.StreamType,
+					"took", took,
+					"error", err,
+				)
+			}
+		} else {
 			slog.Info(
 				"GRPC: Handled stream call",
-				"method", info.FullMethod,
-				"server_stream", info.IsServerStream,
-				"client_stream", info.IsClientStream,
-				"code", s.Code(),
+				"method", spec.Procedure,
+				"stream_type", spec.StreamType,
+				"code", "ok",
 				"took", took,
-			)
-		} else {
-			slog.Info(
-				"GRPC: Handled stream call with error",
-				"method", info.FullMethod,
-				"server_stream", info.IsServerStream,
-				"client_stream", info.IsClientStream,
-				"took", took,
-				"error", err,
 			)
 		}
-	} else {
-		slog.Info(
-			"GRPC: Handled stream call",
-			"method", info.FullMethod,
-			"server_stream", info.IsServerStream,
-			"client_stream", info.IsClientStream,
-			"code", codes.OK,
-			"took", took,
-		)
+
+		return err
 	}
-
-	return err
-}
-
-func LoggerUnaryClientInterceptor(
-	ctx context.Context,
-	method string,
-	req, reply any,
-	cc *grpc.ClientConn,
-	invoker grpc.UnaryInvoker,
-	opts ...grpc.CallOption,
-) (err error) {
-	start := time.Now()
-
-	err = invoker(ctx, method, req, reply, cc, opts...)
-	if err == nil {
-		slog.Info(
-			"GRPC: Invoked unary call",
-			"method", method,
-			"code", codes.OK,
-			"took", time.Since(start).Round(time.Microsecond),
-		)
-	}
-
-	return
-}
-
-func LoggerStreamClientInterceptor(
-	ctx context.Context,
-	desc *grpc.StreamDesc,
-	cc *grpc.ClientConn,
-	method string,
-	streamer grpc.Streamer,
-	opts ...grpc.CallOption,
-) (stream grpc.ClientStream, err error) {
-	start := time.Now()
-
-	stream, err = streamer(ctx, desc, cc, method, opts...)
-	if err == nil {
-		slog.Info(
-			"GRPC: Invoked stream call",
-			"method", method,
-			"server_stream", desc.ServerStreams,
-			"client_stream", desc.ClientStreams,
-			"code", codes.OK,
-			"took", time.Since(start).Round(time.Microsecond),
-		)
-	}
-
-	return
 }

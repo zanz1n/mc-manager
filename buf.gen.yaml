@@ -12,6 +12,16 @@ plugins:
     out: internal/pb
     opt:
       - paths=source_relative
+  - remote: buf.build/connectrpc/go
+    out: internal/pb
+    opt:
+      - paths=source_relative
+  - remote: buf.build/bufbuild/es
+    opt:
+      - target=ts
+      - valid_types=protovalidate_required+legacy_required
+    out: web/src/pb
+    include_imports: true
 
 managed:
   enabled: true

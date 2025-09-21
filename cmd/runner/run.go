@@ -5,18 +5,19 @@ import (
 	"log"
 	"log/slog"
 	"net"
+	"net/http"
 	"time"
 
-	"buf.build/go/protovalidate"
+	"connectrpc.com/connect"
+	"connectrpc.com/grpcreflect"
+	"connectrpc.com/validate"
 	"github.com/docker/docker/client"
-	protovalidate_middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/protovalidate"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/distribution"
 	"github.com/zanz1n/mc-manager/internal/pb"
+	"github.com/zanz1n/mc-manager/internal/pb/pbconnect"
 	"github.com/zanz1n/mc-manager/internal/runner"
 	"github.com/zanz1n/mc-manager/internal/utils"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
 )
 
 func Run(ctx context.Context, cfg *config.RunnerConfig) {
@@ -90,60 +91,58 @@ func Serve(
 		"took", time.Since(start).Round(time.Microsecond),
 	)
 
-	opts := []grpc.ServerOption{
-		grpc.ChainUnaryInterceptor(
-			utils.LoggerUnaryServerInterceptor,
-			utils.ErrorUnaryServerInterceptor,
-		),
-		grpc.ChainStreamInterceptor(
-			utils.LoggerStreamServerInterceptor,
-			utils.ErrorStreamServerInterceptor,
-		),
-	}
-
-	if cfg.Server.Password != "" {
-		opts = append(opts,
-			grpc.ChainUnaryInterceptor(
-				utils.AuthUnaryServerInterceptor(cfg.Server.Password),
-			),
-			grpc.ChainStreamInterceptor(
-				utils.AuthStreamServerInterceptor(cfg.Server.Password),
-			),
-		)
-	}
-
-	validator, err := protovalidate.New()
+	validator, err := validate.NewInterceptor()
 	if err != nil {
 		panic(err)
 	}
 
-	opts = append(opts, grpc.ChainUnaryInterceptor(
-		protovalidate_middleware.UnaryServerInterceptor(validator),
+	loggerInterceptor := utils.NewLoggerInterceptor()
+	errorInterceptor := utils.NewErrorInterceptor()
+
+	mux := http.NewServeMux()
+
+	mux.Handle(pbconnect.NewRunnerServiceHandler(
+		runner.NewServer(manager, distributions),
+		connect.WithInterceptors(loggerInterceptor, errorInterceptor, validator),
 	))
 
-	instanceServer := runner.NewServer(manager, distributions)
-
-	server := grpc.NewServer(opts...)
-	pb.RegisterDistributionServiceServer(
-		server,
-		distribution.NewServer(distributions),
-	)
-	pb.RegisterRunnerServiceServer(server, instanceServer)
-
 	if cfg.Server.EnableReflection {
-		reflection.Register(server)
+		reflector := grpcreflect.NewStaticReflector("manager.RunnerService")
+		mux.Handle(grpcreflect.NewHandlerV1(reflector))
+		mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
 	}
 
-	go server.Serve(ln)
-	defer func() {
-		start := time.Now()
-		graceful := utils.CloseGrpc(3*time.Second, server)
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+
+	s := &http.Server{
+		Addr:      ln.Addr().String(),
+		Handler:   mux,
+		Protocols: protocols,
+		BaseContext: func(l net.Listener) context.Context {
+			return ctx
+		},
+	}
+
+	go func() {
+		<-ctx.Done()
+
+		shutdownStart := time.Now()
+
+		stopctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		err := s.Shutdown(stopctx)
 		slog.Info(
 			"GRPC: Closed server",
-			"graceful", graceful,
-			"took", time.Since(start).Round(time.Millisecond),
+			"took", time.Since(shutdownStart).Round(time.Millisecond),
+			"online_for", time.Since(start).Round(time.Second),
+			"error", err,
 		)
 	}()
 
-	<-ctx.Done()
+	if err = s.Serve(ln); err != nil {
+		log.Fatalln("Failed to grpc serve:", err)
+	}
 }

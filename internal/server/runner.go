@@ -6,39 +6,44 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/dto"
-	"github.com/zanz1n/mc-manager/internal/pb"
+	"github.com/zanz1n/mc-manager/internal/pb/pbconnect"
 	"github.com/zanz1n/mc-manager/internal/utils"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Runners struct {
 	db db.Querier
+	c  *http.Client
 
-	m  map[dto.Snowflake]pb.RunnerServiceClient
+	m  map[dto.Snowflake]pbconnect.RunnerServiceClient
 	mu sync.Mutex
 }
 
-func NewRunners(db db.Querier) *Runners {
+func NewRunners(db db.Querier, c *http.Client) *Runners {
+	if c == nil {
+		c = http.DefaultClient
+	}
+
 	return &Runners{
 		db: db,
-		m:  make(map[dto.Snowflake]pb.RunnerServiceClient),
+		m:  make(map[dto.Snowflake]pbconnect.RunnerServiceClient),
 	}
 }
 
-func (r *Runners) AddRunner(id dto.Snowflake, s pb.RunnerServiceClient) {
+func (r *Runners) AddRunner(id dto.Snowflake, s pbconnect.RunnerServiceClient) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	r.m[id] = s
 }
 
-func (r *Runners) Get(ctx context.Context, id dto.Snowflake) (pb.RunnerServiceClient, error) {
+func (r *Runners) Get(ctx context.Context, id dto.Snowflake) (pbconnect.RunnerServiceClient, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -49,7 +54,7 @@ func (r *Runners) Get(ctx context.Context, id dto.Snowflake) (pb.RunnerServiceCl
 	return r.getSlow(ctx, id)
 }
 
-func (r *Runners) getSlow(ctx context.Context, id dto.Snowflake) (pb.RunnerServiceClient, error) {
+func (r *Runners) getSlow(ctx context.Context, id dto.Snowflake) (pbconnect.RunnerServiceClient, error) {
 	node, err := r.db.NodeGetById(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -58,37 +63,31 @@ func (r *Runners) getSlow(ctx context.Context, id dto.Snowflake) (pb.RunnerServi
 		return nil, err
 	}
 
+	var urlSchema string
+	if node.EndpointTls {
+		urlSchema = "https"
+	} else {
+		urlSchema = "http"
+	}
+
+	baseUrl := fmt.Sprintf("%s://%s:%d", urlSchema, node.Endpoint, node.GrpcPort)
+
 	start := time.Now()
 
-	conn, err := grpc.NewClient(
-		fmt.Sprintf("%s:%d", node.Endpoint, node.GrpcPort),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(
-			utils.LoggerUnaryClientInterceptor,
-			utils.AuthUnaryClientInterceptor(node.Token),
-		),
-		grpc.WithChainStreamInterceptor(
-			utils.LoggerStreamClientInterceptor,
-			utils.AuthStreamClientInterceptor(node.Token),
+	runner := pbconnect.NewRunnerServiceClient(
+		r.c,
+		baseUrl,
+		connect.WithInterceptors(
+			utils.NewLoggerInterceptor(),
+			utils.NewAuthInterceptor(node.Token),
 		),
 	)
-	if err != nil {
-		slog.Error(
-			"InstanceServer: Failed to reach node",
-			"id", id,
-			"took", time.Since(start).Round(time.Microsecond),
-			"error", err,
-		)
-		return nil, errors.Join(ErrNodeUnreachable, err)
-	}
+
 	slog.Info(
 		"InstanceServer: Connected to node",
 		"id", id,
 		"took", time.Since(start).Round(time.Microsecond),
 	)
 
-	s := pb.NewRunnerServiceClient(conn)
-	r.m[id] = s
-
-	return s, nil
+	return runner, nil
 }

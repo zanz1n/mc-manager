@@ -6,18 +6,19 @@ import (
 	"errors"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/auth"
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
+	"github.com/zanz1n/mc-manager/internal/pb/pbconnect"
+	"github.com/zanz1n/mc-manager/internal/utils"
 	"golang.org/x/crypto/bcrypt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-var _ pb.AuthServiceServer = (*AuthServer)(nil)
+var _ pbconnect.AuthServiceHandler = (*AuthServer)(nil)
 
 type AuthServer struct {
 	db           db.Querier
@@ -27,7 +28,7 @@ type AuthServer struct {
 	enableSignup bool
 	bcryptCost   int
 
-	pb.UnimplementedAuthServiceServer
+	// pbconnect.UnimplementedAuthServiceHandler
 }
 
 func NewAuthServer(
@@ -46,9 +47,14 @@ func NewAuthServer(
 	}
 }
 
-// GetSelf implements pb.AuthServiceServer.
-func (s *AuthServer) GetSelf(ctx context.Context, req *emptypb.Empty) (*pb.User, error) {
-	token, err := s.ar.AuthenticateUser(ctx)
+// GetSelf implements pbconnect.AuthServiceHandler.
+func (s *AuthServer) GetSelf(
+	ctx context.Context,
+	req *connect.Request[emptypb.Empty],
+) (*connect.Response[pb.User], error) {
+	res := connect.NewResponse((*pb.User)(nil))
+
+	token, err := s.ar.AuthenticateUser(ctx, req.Header(), res.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -61,15 +67,16 @@ func (s *AuthServer) GetSelf(ctx context.Context, req *emptypb.Empty) (*pb.User,
 		return nil, err
 	}
 
-	return user.IntoPB(), nil
+	res.Msg = user.IntoPB()
+	return res, nil
 }
 
-// Login implements pb.AuthServiceServer.
+// Login implements pbconnect.AuthServiceHandler.
 func (s *AuthServer) Login(
 	ctx context.Context,
-	req *pb.AuthLoginRequest,
-) (*pb.AuthLoginResponse, error) {
-	user, err := s.db.UserGetByEmail(ctx, req.Email)
+	req *connect.Request[pb.AuthLoginRequest],
+) (*connect.Response[pb.AuthLoginResponse], error) {
+	user, err := s.db.UserGetByEmail(ctx, req.Msg.Email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = ErrLogin
@@ -77,7 +84,7 @@ func (s *AuthServer) Login(
 		return nil, err
 	}
 
-	err = bcrypt.CompareHashAndPassword(user.Password, []byte(req.Password))
+	err = bcrypt.CompareHashAndPassword(user.Password, []byte(req.Msg.Password))
 	if err != nil {
 		return nil, ErrLogin
 	}
@@ -92,26 +99,26 @@ func (s *AuthServer) Login(
 		return nil, err
 	}
 
-	return &pb.AuthLoginResponse{
+	return connect.NewResponse(&pb.AuthLoginResponse{
 		Token:        token,
 		RefreshToken: refreshToken,
-	}, nil
+	}), nil
 }
 
-// Signup implements pb.AuthServiceServer.
+// Signup implements pbconnect.AuthServiceHandler.
 func (s *AuthServer) Signup(
 	ctx context.Context,
-	req *pb.AuthSignupRequest,
-) (*pb.AuthSignupResponse, error) {
+	req *connect.Request[pb.AuthSignupRequest],
+) (*connect.Response[pb.AuthSignupResponse], error) {
 	if !s.enableSignup {
-		return nil, status.Error(
-			codes.PermissionDenied,
+		return nil, utils.Error(
+			connect.CodePermissionDenied,
 			"signup is disabled",
 		)
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword(
-		[]byte(req.Password),
+		[]byte(req.Msg.Password),
 		s.bcryptCost,
 	)
 	if err != nil {
@@ -120,11 +127,11 @@ func (s *AuthServer) Signup(
 
 	user, err := s.db.UserCreate(ctx, db.UserCreateParams{
 		ID:            dto.NewSnowflake(),
-		Username:      req.Username,
-		FirstName:     req.FirstName,
-		LastName:      req.LastName,
-		MinecraftUser: req.MinecraftUser,
-		Email:         req.Email,
+		Username:      req.Msg.Username,
+		FirstName:     req.Msg.FirstName,
+		LastName:      req.Msg.LastName,
+		MinecraftUser: req.Msg.MinecraftUser,
+		Email:         req.Msg.Email,
 		Admin:         false,
 		TwoFa:         false,
 		Password:      hashed,
@@ -143,9 +150,9 @@ func (s *AuthServer) Signup(
 		return nil, err
 	}
 
-	return &pb.AuthSignupResponse{
+	return connect.NewResponse(&pb.AuthSignupResponse{
 		Token:        token,
 		RefreshToken: refreshToken,
 		User:         user.IntoPB(),
-	}, nil
+	}), nil
 }

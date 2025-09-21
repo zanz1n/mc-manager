@@ -3,23 +3,33 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"io/fs"
 	"log"
 	"log/slog"
+	"mime"
 	"net"
+	"net/http"
+	"path"
+	"strings"
 	"time"
 
-	"buf.build/go/protovalidate"
-	protovalidate_middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/protovalidate"
+	"connectrpc.com/connect"
+	"connectrpc.com/grpcreflect"
+	"connectrpc.com/validate"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/auth"
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/distribution"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
+	"github.com/zanz1n/mc-manager/internal/pb/pbconnect"
 	"github.com/zanz1n/mc-manager/internal/server"
 	"github.com/zanz1n/mc-manager/internal/utils"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
+	webstatic "github.com/zanz1n/mc-manager/web"
 )
 
 func Run(ctx context.Context, cfg *config.APIConfig) {
@@ -86,7 +96,7 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 		distribution.NewVanilla(nil),
 	)
 
-	runners := server.NewRunners(querier)
+	runners := server.NewRunners(querier, nil)
 
 	if cfg.LocalNode != nil && cfg.LocalNode.Enable {
 		r, err := RunLocalNode(ctx, cfg.LocalNode, distroRepo, querier)
@@ -117,6 +127,7 @@ func Serve(
 	runners *server.Runners,
 ) {
 	start := time.Now()
+
 	ln, err := net.ListenTCP("tcp", &net.TCPAddr{
 		IP:   cfg.Server.IP,
 		Port: int(cfg.Server.Port),
@@ -131,63 +142,141 @@ func Serve(
 		"took", time.Since(start).Round(time.Microsecond),
 	)
 
-	validator, err := protovalidate.New()
+	validator, err := validate.NewInterceptor()
 	if err != nil {
 		panic(err)
 	}
-
-	grpcServer := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			utils.LoggerUnaryServerInterceptor,
-			utils.ErrorUnaryServerInterceptor,
-			protovalidate_middleware.UnaryServerInterceptor(validator),
-		),
-		grpc.ChainStreamInterceptor(
-			utils.LoggerStreamServerInterceptor,
-			utils.ErrorStreamServerInterceptor,
-		),
-	)
 
 	var localNodeId dto.Snowflake
 	if cfg.LocalNode != nil {
 		localNodeId = cfg.LocalNode.ID
 	}
 
-	pb.RegisterAuthServiceServer(
-		grpcServer,
-		server.NewAuthServer(querier, auther, authRepo, cfg),
-	)
-	pb.RegisterUserServiceServer(
-		grpcServer,
-		server.NewUserServer(querier, authRepo, cfg),
-	)
-	pb.RegisterNodeServiceServer(
-		grpcServer,
-		server.NewNodeServer(querier, authRepo, localNodeId),
-	)
-	pb.RegisterInstanceServiceServer(
-		grpcServer,
-		server.NewInstanceServer(querier, authRepo, runners),
-	)
-	pb.RegisterDistributionServiceServer(
-		grpcServer,
-		distribution.NewServer(distroRepo),
-	)
+	loggerInterceptor := utils.NewLoggerInterceptor()
+	errorInterceptor := utils.NewErrorInterceptor()
 
-	if cfg.Server.EnableReflection {
-		reflection.Register(grpcServer)
+	r := chi.NewRouter()
+	r.Use(cors.AllowAll().Handler)
+	r.Use(middleware.CleanPath)
+
+	r.Mount("/", fileHandler(webstatic.Build))
+
+	r.Route("/api", func(r chi.Router) {
+		r.Use(stripPrefix("/api"))
+		r.NotFound(http.NotFound)
+
+		r.Mount(pbconnect.NewAuthServiceHandler(
+			server.NewAuthServer(querier, auther, authRepo, cfg),
+			connect.WithInterceptors(loggerInterceptor, errorInterceptor, validator),
+		))
+		r.Mount(pbconnect.NewUserServiceHandler(
+			server.NewUserServer(querier, authRepo, cfg),
+			connect.WithInterceptors(loggerInterceptor, errorInterceptor, validator),
+		))
+		r.Mount(pbconnect.NewNodeServiceHandler(
+			server.NewNodeServer(querier, authRepo, localNodeId),
+			connect.WithInterceptors(loggerInterceptor, errorInterceptor, validator),
+		))
+		r.Mount(pbconnect.NewInstanceServiceHandler(
+			server.NewInstanceServer(querier, authRepo, runners),
+			connect.WithInterceptors(loggerInterceptor, errorInterceptor, validator),
+		))
+		r.Mount(pbconnect.NewDistributionServiceHandler(
+			distribution.NewServer(distroRepo),
+			connect.WithInterceptors(loggerInterceptor, errorInterceptor, validator),
+		))
+
+		if cfg.Server.EnableReflection {
+			reflector := grpcreflect.NewStaticReflector(
+				"manager.AuthService",
+				"manager.UserService",
+				"manager.NodeService",
+				"manager.InstanceService",
+				"manager.DistributionService",
+			)
+			r.Mount(grpcreflect.NewHandlerV1(reflector))
+			r.Mount(grpcreflect.NewHandlerV1Alpha(reflector))
+		}
+	})
+
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+
+	s := &http.Server{
+		Addr:      ln.Addr().String(),
+		Handler:   r,
+		Protocols: protocols,
+		BaseContext: func(l net.Listener) context.Context {
+			return ctx
+		},
 	}
 
-	go grpcServer.Serve(ln)
-	defer func() {
-		start := time.Now()
-		graceful := utils.CloseGrpc(3*time.Second, grpcServer)
+	go func() {
+		<-ctx.Done()
+
+		shutdownStart := time.Now()
+
+		stopctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		err := s.Shutdown(stopctx)
 		slog.Info(
 			"GRPC: Closed server",
-			"graceful", graceful,
-			"took", time.Since(start).Round(time.Millisecond),
+			"took", time.Since(shutdownStart).Round(time.Millisecond),
+			"online_for", time.Since(start).Round(time.Second),
+			"error", err,
 		)
 	}()
 
-	<-ctx.Done()
+	if err = s.Serve(ln); err != nil {
+		log.Fatalln("Failed to grpc serve:", err)
+	}
+}
+
+func stripPrefix(prefix string) func(h http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
+			r.URL.RawPath = strings.TrimPrefix(r.URL.RawPath, prefix)
+
+			h.ServeHTTP(w, r)
+		})
+	}
+}
+
+func handleIndex(static fs.FS, w http.ResponseWriter, r *http.Request) {
+	f, err := static.Open("build/index.html")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+
+	w.Header().Set("content-type", "text/html; charset=utf-8")
+	io.Copy(w, f)
+}
+
+func fileHandler(static fs.FS) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" || r.URL.Path == "" {
+			handleIndex(static, w, r)
+			return
+		}
+
+		f, err := static.Open(path.Join("build", r.URL.Path))
+		if err != nil {
+			handleIndex(static, w, r)
+			return
+		}
+		defer f.Close()
+
+		mimetype := mime.TypeByExtension(path.Ext(r.URL.Path))
+		if mimetype == "" {
+			mimetype = "text/plain"
+		}
+
+		w.Header().Set("content-type", mimetype)
+		io.Copy(w, f)
+	}
 }

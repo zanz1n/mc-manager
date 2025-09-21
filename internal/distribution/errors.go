@@ -1,12 +1,30 @@
 package distribution
 
-import "errors"
+import (
+	"connectrpc.com/connect"
+	"github.com/zanz1n/mc-manager/internal/utils"
+)
 
 var (
-	ErrHttp                = errors.New("http error while fetching distribution")
-	ErrVersionNotFound     = errors.New("distribution version not found")
-	ErrInvalidDistribution = errors.New("distribution is invalid")
+	ErrHttp = utils.Error(
+		connect.CodeInternal,
+		"http error while fetching distribution",
+	)
+	ErrVersionNotFound = utils.Error(
+		connect.CodeNotFound,
+		"distribution version not found",
+	)
+	ErrInvalidDistribution = utils.Error(
+		connect.CodeInvalidArgument,
+		"distribution is invalid",
+	)
 
-	ErrHashNotAvailable = errors.New("hash not available for this version")
-	ErrHashFailed       = errors.New("failed to verify hash")
+	ErrHashNotAvailable = utils.Error(
+		connect.CodeUnavailable,
+		"hash not available for this version",
+	)
+	ErrHashFailed = utils.Error(
+		connect.CodeInternal,
+		"failed to verify hash",
+	)
 )

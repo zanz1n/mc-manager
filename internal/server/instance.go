@@ -4,26 +4,26 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"io"
 	"log/slog"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/zanz1n/mc-manager/internal/auth"
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
-	"google.golang.org/grpc"
+	"github.com/zanz1n/mc-manager/internal/pb/pbconnect"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-var _ pb.InstanceServiceServer = (*InstanceServer)(nil)
+var _ pbconnect.InstanceServiceHandler = (*InstanceServer)(nil)
 
 type InstanceServer struct {
 	db db.Querier
 	ar *auth.Respository
 	r  *Runners
 
-	pb.UnimplementedInstanceServiceServer
+	pbconnect.UnimplementedInstanceServiceHandler
 }
 
 func NewInstanceServer(db db.Querier, ar *auth.Respository, r *Runners) *InstanceServer {
@@ -34,13 +34,18 @@ func NewInstanceServer(db db.Querier, ar *auth.Respository, r *Runners) *Instanc
 	}
 }
 
-// GetById implements pb.InstanceServiceServer.
-func (s *InstanceServer) GetById(ctx context.Context, req *pb.Snowflake) (*pb.Instance, error) {
-	authed, err := s.ar.Authenticate(ctx)
+// GetById implements pbconnect.InstanceServiceHandler.
+func (s *InstanceServer) GetById(
+	ctx context.Context,
+	req *connect.Request[pb.Snowflake],
+) (*connect.Response[pb.Instance], error) {
+	res := connect.NewResponse((*pb.Instance)(nil))
+
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
 	if err != nil {
 		return nil, err
 	}
-	id := dto.Snowflake(req.Id)
+	id := dto.Snowflake(req.Msg.Id)
 
 	i, err := s.instanceGetById(ctx, id)
 	if err != nil {
@@ -59,45 +64,53 @@ func (s *InstanceServer) GetById(ctx context.Context, req *pb.Snowflake) (*pb.In
 	}
 
 	state, players := pb.InstanceState_STATE_OFFLINE, int32(0)
-	ri, err := runner.GetStateById(ctx, &pb.Snowflake{Id: req.Id})
+
+	snowflake := connect.NewRequest(&pb.Snowflake{Id: req.Msg.Id})
+	ri, err := runner.GetStateById(ctx, snowflake)
 	if err == nil {
-		state, players = ri.State, ri.Players
+		state, players = ri.Msg.State, ri.Msg.Players
 	}
 
-	return i.IntoPB(state, players), nil
+	res.Msg = i.IntoPB(state, players)
+	return res, nil
 }
 
-// GetMany implements pb.InstanceServiceServer.
-// func (r *InstanceServer) GetMany(
+// // GetMany implements pbconnect.InstanceServiceHandler.
+// func (s *InstanceServer) GetMany(
 // 	ctx context.Context,
-// 	req *pb.Pagination,
-// ) (*pb.InstanceGetManyResponse, error) {
+// 	req *connect.Request[pb.Pagination],
+// ) (*connect.Response[pb.InstanceGetManyResponse], error) {
 // 	panic("unimplemented")
 // }
 
-// GetByUser implements pb.InstanceServiceServer.
-// func (r *InstanceServer) GetByUser(
+// // GetByUser implements pbconnect.InstanceServiceHandler.
+// func (s *InstanceServer) GetByUser(
 // 	ctx context.Context,
-// 	req *pb.InstanceGetByUserRequest,
-// ) (*pb.InstanceGetManyResponse, error) {
+// 	req *connect.Request[pb.InstanceGetByUserRequest],
+// ) (*connect.Response[pb.InstanceGetManyResponse], error) {
 // 	panic("unimplemented")
 // }
 
-// GetByNode implements pb.InstanceServiceServer.
-// func (r *InstanceServer) GetByNode(
+// // GetByNode implements pbconnect.InstanceServiceHandler.
+// func (s *InstanceServer) GetByNode(
 // 	ctx context.Context,
-// 	req *pb.InstanceGetByNodeRequest,
-// ) (*pb.InstanceGetManyResponse, error) {
+// 	req *connect.Request[pb.InstanceGetByNodeRequest],
+// ) (*connect.Response[pb.InstanceGetManyResponse], error) {
 // 	panic("unimplemented")
 // }
 
-// Launch implements pb.InstanceServiceServer.
-func (s *InstanceServer) Launch(ctx context.Context, req *pb.Snowflake) (*emptypb.Empty, error) {
-	authed, err := s.ar.Authenticate(ctx)
+// Launch implements pbconnect.InstanceServiceHandler.
+func (s *InstanceServer) Launch(
+	ctx context.Context,
+	req *connect.Request[pb.Snowflake],
+) (*connect.Response[emptypb.Empty], error) {
+	res := connect.NewResponse((*emptypb.Empty)(nil))
+
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
 	if err != nil {
 		return nil, err
 	}
-	id := dto.Snowflake(req.Id)
+	id := dto.Snowflake(req.Msg.Id)
 
 	i, err := s.instanceGetById(ctx, id)
 	if err != nil {
@@ -115,14 +128,14 @@ func (s *InstanceServer) Launch(ctx context.Context, req *pb.Snowflake) (*emptyp
 		return nil, err
 	}
 
-	_, err = runner.Launch(ctx, &pb.RunnerLaunchRequest{
+	_, err = runner.Launch(ctx, connect.NewRequest(&pb.RunnerLaunchRequest{
 		Id:            uint64(i.ID),
 		Name:          i.Name,
 		Version:       i.Version,
 		VersionDistro: i.VersionDistro,
 		Limits:        i.Limits,
 		Config:        i.Config,
-	})
+	}))
 	if err != nil {
 		return nil, err
 	}
@@ -135,16 +148,22 @@ func (s *InstanceServer) Launch(ctx context.Context, req *pb.Snowflake) (*emptyp
 		)
 	}
 
-	return &emptypb.Empty{}, nil
+	res.Msg = &emptypb.Empty{}
+	return res, nil
 }
 
-// Stop implements pb.InstanceServiceServer.
-func (s *InstanceServer) Stop(ctx context.Context, req *pb.Snowflake) (*emptypb.Empty, error) {
-	authed, err := s.ar.Authenticate(ctx)
+// Stop implements pbconnect.InstanceServiceHandler.
+func (s *InstanceServer) Stop(
+	ctx context.Context,
+	req *connect.Request[pb.Snowflake],
+) (*connect.Response[emptypb.Empty], error) {
+	res := connect.NewResponse((*emptypb.Empty)(nil))
+
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
 	if err != nil {
 		return nil, err
 	}
-	id := dto.Snowflake(req.Id)
+	id := dto.Snowflake(req.Msg.Id)
 
 	i, err := s.instanceGetById(ctx, id)
 	if err != nil {
@@ -162,20 +181,24 @@ func (s *InstanceServer) Stop(ctx context.Context, req *pb.Snowflake) (*emptypb.
 		return nil, err
 	}
 
-	_, err = runner.Stop(ctx, &pb.Snowflake{Id: req.Id})
+	snowflake := connect.NewRequest(&pb.Snowflake{Id: req.Msg.Id})
+	_, err = runner.Stop(ctx, snowflake)
 	if err != nil {
 		return nil, err
 	}
 
-	return &emptypb.Empty{}, nil
+	res.Msg = &emptypb.Empty{}
+	return res, nil
 }
 
-// Create implements pb.InstanceServiceServer.
+// Create implements pbconnect.InstanceServiceHandler.
 func (s *InstanceServer) Create(
 	ctx context.Context,
-	req *pb.InstanceCreateRequest,
-) (*pb.Instance, error) {
-	authed, err := s.ar.Authenticate(ctx)
+	req *connect.Request[pb.InstanceCreateRequest],
+) (*connect.Response[pb.Instance], error) {
+	res := connect.NewResponse((*pb.Instance)(nil))
+
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -187,33 +210,36 @@ func (s *InstanceServer) Create(
 
 	i, err := s.db.InstanceCreate(ctx, db.InstanceCreateParams{
 		ID:            id,
-		UserID:        dto.Snowflake(req.UserId),
-		NodeID:        dto.Snowflake(req.NodeId),
-		Name:          req.Name,
-		Description:   req.Description,
-		Version:       req.Version,
-		VersionDistro: req.VersionDistro,
-		Config:        req.Config,
-		Limits:        req.Limits,
+		UserID:        dto.Snowflake(req.Msg.UserId),
+		NodeID:        dto.Snowflake(req.Msg.NodeId),
+		Name:          req.Msg.Name,
+		Description:   req.Msg.Description,
+		Version:       req.Msg.Version,
+		VersionDistro: req.Msg.VersionDistro,
+		Config:        req.Msg.Config,
+		Limits:        req.Msg.Limits,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return i.IntoPB(pb.InstanceState_STATE_OFFLINE, 0), nil
+	res.Msg = i.IntoPB(pb.InstanceState_STATE_OFFLINE, 0)
+	return res, nil
 }
 
-// SendCommand implements pb.InstanceServiceServer.
+// SendCommand implements pbconnect.InstanceServiceHandler.
 func (s *InstanceServer) SendCommand(
 	ctx context.Context,
-	req *pb.InstanceSendCommandRequest,
-) (*emptypb.Empty, error) {
-	authed, err := s.ar.Authenticate(ctx)
+	req *connect.Request[pb.InstanceSendCommandRequest],
+) (*connect.Response[emptypb.Empty], error) {
+	res := connect.NewResponse((*emptypb.Empty)(nil))
+
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
 	if err != nil {
 		return nil, err
 	}
 
-	i, err := s.instanceGetById(ctx, dto.Snowflake(req.InstanceId))
+	i, err := s.instanceGetById(ctx, dto.Snowflake(req.Msg.InstanceId))
 	if err != nil {
 		return nil, err
 	}
@@ -229,29 +255,32 @@ func (s *InstanceServer) SendCommand(
 		return nil, err
 	}
 
-	_, err = runner.SendCommand(ctx, &pb.RunnerSendCommandRequest{
-		InstanceId: req.InstanceId,
-		Command:    req.Command,
-	})
+	_, err = runner.SendCommand(ctx, connect.NewRequest(
+		&pb.RunnerSendCommandRequest{
+			InstanceId: req.Msg.InstanceId,
+			Command:    req.Msg.Command,
+		},
+	))
 	if err != nil {
 		return nil, err
 	}
-	return &emptypb.Empty{}, nil
+
+	res.Msg = &emptypb.Empty{}
+	return res, nil
 }
 
-// GetEvents implements pb.InstanceServiceServer.
+// GetEvents implements pbconnect.InstanceServiceHandler.
 func (s *InstanceServer) GetEvents(
-	req *pb.InstanceGetEventsRequest,
-	stream grpc.ServerStreamingServer[pb.Event],
+	ctx context.Context,
+	req *connect.Request[pb.InstanceGetEventsRequest],
+	stream *connect.ServerStream[pb.Event],
 ) error {
-	ctx := stream.Context()
-
-	authed, err := s.ar.Authenticate(ctx)
+	authed, err := s.ar.Authenticate(ctx, req.Header(), stream.ResponseHeader())
 	if err != nil {
 		return err
 	}
 
-	i, err := s.instanceGetById(ctx, dto.Snowflake(req.Id))
+	i, err := s.instanceGetById(ctx, dto.Snowflake(req.Msg.Id))
 	if err != nil {
 		return err
 	}
@@ -267,22 +296,23 @@ func (s *InstanceServer) GetEvents(
 		return err
 	}
 
-	res, err := runner.Listen(ctx, &pb.RunnerListenRequest{
-		InstanceId:  req.Id,
-		IncludeLogs: req.IncludeLogs,
-	})
+	nstream, err := runner.Listen(ctx, connect.NewRequest(
+		&pb.RunnerListenRequest{
+			InstanceId:  req.Msg.Id,
+			IncludeLogs: req.Msg.IncludeLogs,
+		},
+	))
 	if err != nil {
 		return err
 	}
 
 	for {
-		event, err := res.Recv()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil
-			}
-			return err
+		ok := nstream.Receive()
+		if !ok {
+			return nstream.Err()
 		}
+
+		event := nstream.Msg()
 
 		if err = stream.Send(event); err != nil {
 			return err
@@ -290,9 +320,14 @@ func (s *InstanceServer) GetEvents(
 	}
 }
 
-// Delete implements pb.InstanceServiceServer.
-func (s *InstanceServer) Delete(ctx context.Context, req *pb.Snowflake) (*pb.Instance, error) {
-	authed, err := s.ar.Authenticate(ctx)
+// Delete implements pbconnect.InstanceServiceHandler.
+func (s *InstanceServer) Delete(
+	ctx context.Context,
+	req *connect.Request[pb.Snowflake],
+) (*connect.Response[pb.Instance], error) {
+	res := connect.NewResponse((*pb.Instance)(nil))
+
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +336,7 @@ func (s *InstanceServer) Delete(ctx context.Context, req *pb.Snowflake) (*pb.Ins
 		return nil, ErrPermissionDenied
 	}
 
-	id := dto.Snowflake(req.Id)
+	id := dto.Snowflake(req.Msg.Id)
 
 	i, err := s.db.InstanceDelete(ctx, id)
 	if err != nil {
@@ -316,7 +351,8 @@ func (s *InstanceServer) Delete(ctx context.Context, req *pb.Snowflake) (*pb.Ins
 
 		runner, err := s.r.Get(ctx, i.NodeID)
 		if err == nil {
-			runner.Stop(ctx, &pb.Snowflake{Id: req.Id})
+			snowflake := connect.NewRequest(&pb.Snowflake{Id: req.Msg.Id})
+			runner.Stop(ctx, snowflake)
 		} else {
 			slog.Error(
 				"InstanceServer: Failed to call node to stop instance",
@@ -327,7 +363,8 @@ func (s *InstanceServer) Delete(ctx context.Context, req *pb.Snowflake) (*pb.Ins
 		}
 	}()
 
-	return i.IntoPB(pb.InstanceState_STATE_OFFLINE, 0), nil
+	res.Msg = i.IntoPB(pb.InstanceState_STATE_OFFLINE, 0)
+	return res, nil
 }
 
 func (s *InstanceServer) instanceGetById(

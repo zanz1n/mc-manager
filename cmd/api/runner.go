@@ -6,18 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
+	"net/http"
+	"net/http/httptest"
 	"time"
 
 	"github.com/docker/docker/client"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/distribution"
-	"github.com/zanz1n/mc-manager/internal/pb"
+	"github.com/zanz1n/mc-manager/internal/pb/pbconnect"
 	"github.com/zanz1n/mc-manager/internal/runner"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/test/bufconn"
 )
 
 func RunLocalNode(
@@ -25,7 +23,7 @@ func RunLocalNode(
 	cfg *config.APILocalNodeConfig,
 	distros *distribution.Repository,
 	queries db.Querier,
-) (pb.RunnerServiceClient, error) {
+) (pbconnect.RunnerServiceClient, error) {
 	_, err := queries.NodeGetById(ctx, cfg.ID)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
@@ -78,32 +76,16 @@ func RunLocalNode(
 	manager := runner.NewManager(runtime)
 	runnerServer := runner.NewServer(manager, distros)
 
-	ln := bufconn.Listen(1024 * 1024)
-	s := grpc.NewServer()
-	pb.RegisterRunnerServiceServer(s, runnerServer)
+	mux := http.NewServeMux()
+	mux.Handle(pbconnect.NewRunnerServiceHandler(runnerServer))
 
-	dialFn := func(ctx context.Context, s string) (net.Conn, error) {
-		return ln.DialContext(ctx)
-	}
-
-	conn, err := grpc.NewClient("passthrough://bufnet",
-		grpc.WithContextDialer(dialFn),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	go func() {
-		if err := s.Serve(ln); err != nil {
-			panic(err)
-		}
-	}()
+	server := httptest.NewServer(mux)
+	client := pbconnect.NewRunnerServiceClient(server.Client(), "http://example.com")
 
 	slog.Info(
 		"LocalNode: Running local node",
 		"took", time.Since(start).Round(time.Microsecond),
 	)
 
-	return pb.NewRunnerServiceClient(conn), nil
+	return client, nil
 }

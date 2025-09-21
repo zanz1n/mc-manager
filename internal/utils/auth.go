@@ -2,101 +2,80 @@ package utils
 
 import (
 	"context"
-	"strings"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
+	"connectrpc.com/connect"
 )
 
 var (
-	errMissingAuthorization = status.Errorf(
-		codes.Unauthenticated,
+	errMissingAuthorization = Error(
+		connect.CodeUnauthenticated,
 		"no incoming `authorization` metadata in grpc context",
 	)
-	errPasswordMismatches = status.Errorf(
-		codes.Unauthenticated,
+	errPasswordMismatches = Error(
+		connect.CodeUnauthenticated,
 		"the `authorization` metadata password mismatches",
 	)
 )
 
-func AuthUnaryServerInterceptor(passwd string) grpc.UnaryServerInterceptor {
-	return func(
-		ctx context.Context,
-		req any,
-		info *grpc.UnaryServerInfo,
-		handler grpc.UnaryHandler,
-	) (any, error) {
-		if passwd != "" && !strings.HasPrefix(info.FullMethod, "/grpc.reflection") {
-			auth := metadata.ValueFromIncomingContext(ctx, "authorization")
-			if len(auth) != 1 {
-				return nil, errMissingAuthorization
-			}
+type authInterceptor struct {
+	passwd string
+}
 
-			if auth[0] != passwd {
-				return nil, errPasswordMismatches
-			}
+func NewAuthInterceptor(passwd string) connect.Interceptor {
+	return &authInterceptor{passwd: passwd}
+}
 
+// WrapUnary implements connect.Interceptor.
+func (a *authInterceptor) WrapUnary(handler connect.UnaryFunc) connect.UnaryFunc {
+	if a.passwd == "" {
+		return handler
+	}
+
+	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+		authHead := req.Header().Get("authorization")
+		if authHead == "" {
+			return nil, errMissingAuthorization
 		}
 
+		if authHead != a.passwd {
+			return nil, errPasswordMismatches
+		}
 		return handler(ctx, req)
 	}
 }
 
-func AuthStreamServerInterceptor(passwd string) grpc.StreamServerInterceptor {
-	return func(
-		srv any,
-		ss grpc.ServerStream,
-		info *grpc.StreamServerInfo,
-		handler grpc.StreamHandler,
-	) error {
-		if passwd != "" && !strings.HasPrefix(info.FullMethod, "/grpc.reflection") {
-			auth := metadata.ValueFromIncomingContext(ss.Context(), "authorization")
-			if len(auth) != 1 {
-				return errMissingAuthorization
-			}
+// WrapStreamingClient implements connect.Interceptor.
+func (a *authInterceptor) WrapStreamingClient(
+	handler connect.StreamingClientFunc,
+) connect.StreamingClientFunc {
+	if a.passwd == "" {
+		return handler
+	}
 
-			if auth[0] != passwd {
-				return errPasswordMismatches
-			}
-
-		}
-
-		return handler(srv, ss)
+	return func(ctx context.Context, spec connect.Spec) connect.StreamingClientConn {
+		conn := handler(ctx, spec)
+		conn.RequestHeader().Add("authorization", a.passwd)
+		return conn
 	}
 }
 
-func AuthUnaryClientInterceptor(passwd string) grpc.UnaryClientInterceptor {
-	return func(
-		ctx context.Context,
-		method string,
-		req, reply any,
-		cc *grpc.ClientConn,
-		invoker grpc.UnaryInvoker,
-		opts ...grpc.CallOption,
-	) error {
-		if passwd != "" && !strings.HasPrefix(method, "/grpc.reflection") {
-			ctx = metadata.AppendToOutgoingContext(ctx, "authorization", passwd)
-		}
-
-		return invoker(ctx, method, req, reply, cc, opts...)
+// WrapStreamingHandler implements connect.Interceptor.
+func (a *authInterceptor) WrapStreamingHandler(
+	handler connect.StreamingHandlerFunc,
+) connect.StreamingHandlerFunc {
+	if a.passwd == "" {
+		return handler
 	}
-}
 
-func AuthStreamClientInterceptor(passwd string) grpc.StreamClientInterceptor {
-	return func(
-		ctx context.Context,
-		desc *grpc.StreamDesc,
-		cc *grpc.ClientConn,
-		method string,
-		streamer grpc.Streamer,
-		opts ...grpc.CallOption,
-	) (grpc.ClientStream, error) {
-		if passwd != "" && !strings.HasPrefix(method, "/grpc.reflection") {
-			ctx = metadata.AppendToOutgoingContext(ctx, "authorization", passwd)
+	return func(ctx context.Context, shc connect.StreamingHandlerConn) error {
+		authHead := shc.RequestHeader().Get("authorization")
+		if authHead == "" {
+			return errMissingAuthorization
 		}
 
-		return streamer(ctx, desc, cc, method, opts...)
+		if authHead != a.passwd {
+			return errPasswordMismatches
+		}
+		return handler(ctx, shc)
 	}
 }

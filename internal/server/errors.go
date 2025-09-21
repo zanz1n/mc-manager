@@ -1,43 +1,43 @@
 package server
 
 import (
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"connectrpc.com/connect"
+	"github.com/zanz1n/mc-manager/internal/utils"
 )
 
 var (
-	ErrInstanceNotFound = status.Error(
-		codes.NotFound,
+	ErrInstanceNotFound = utils.Error(
+		connect.CodeNotFound,
 		"instance not found",
 	)
 
-	ErrNodeNotFound = status.Error(
-		codes.NotFound,
+	ErrNodeNotFound = utils.Error(
+		connect.CodeNotFound,
 		"node not found",
 	)
 
-	ErrNodeUnreachable = status.Error(
-		codes.Internal,
+	ErrNodeUnreachable = utils.Error(
+		connect.CodeInternal,
 		"node is unreachable",
 	)
 
-	ErrLocalNodeUndeletable = status.Error(
-		codes.PermissionDenied,
+	ErrLocalNodeUndeletable = utils.Error(
+		connect.CodePermissionDenied,
 		"local node can not be deleted",
 	)
 
-	ErrPermissionDenied = status.Error(
-		codes.PermissionDenied,
+	ErrPermissionDenied = utils.Error(
+		connect.CodePermissionDenied,
 		"permission denied",
 	)
 
-	ErrUserNotFound = status.Error(
-		codes.NotFound,
+	ErrUserNotFound = utils.Error(
+		connect.CodeNotFound,
 		"user not found",
 	)
 
-	ErrLogin = status.Error(
-		codes.PermissionDenied,
+	ErrLogin = utils.Error(
+		connect.CodePermissionDenied,
 		"user does not exist or password mismatches",
 	)
 )

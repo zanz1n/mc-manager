@@ -1,45 +1,45 @@
 package runner
 
 import (
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"connectrpc.com/connect"
+	"github.com/zanz1n/mc-manager/internal/utils"
 )
 
 var (
-	ErrJavaVersion = status.Error(
-		codes.NotFound,
+	ErrJavaVersion = utils.Error(
+		connect.CodeNotFound,
 		"the instance java version is invalid",
 	)
-	ErrFileSystem = status.Error(
-		codes.Internal,
+	ErrFileSystem = utils.Error(
+		connect.CodeInternal,
 		"filesystem error",
 	)
-	ErrInstanceNotFound = status.Error(
-		codes.NotFound,
+	ErrInstanceNotFound = utils.Error(
+		connect.CodeNotFound,
 		"instance not found",
 	)
-	ErrInstanceAlreadyLaunched = status.Error(
-		codes.AlreadyExists,
+	ErrInstanceAlreadyLaunched = utils.Error(
+		connect.CodeAlreadyExists,
 		"instance already launched",
 	)
-	ErrInstanceCreate = status.Error(
-		codes.Internal,
+	ErrInstanceCreate = utils.Error(
+		connect.CodeInternal,
 		"failed to create instance",
 	)
-	ErrInstanceLaunch = status.Error(
-		codes.Internal,
+	ErrInstanceLaunch = utils.Error(
+		connect.CodeInternal,
 		"failed to launch instance",
 	)
-	ErrInstanceStop = status.Error(
-		codes.Internal,
+	ErrInstanceStop = utils.Error(
+		connect.CodeInternal,
 		"failed to stop instance",
 	)
-	ErrInvalidCreateData = status.Error(
-		codes.InvalidArgument,
+	ErrInvalidCreateData = utils.Error(
+		connect.CodeInvalidArgument,
 		"invalid instance create data",
 	)
-	ErrSendCommand = status.Error(
-		codes.Internal,
+	ErrSendCommand = utils.Error(
+		connect.CodeInternal,
 		"failed to send command to instance",
 	)
 )

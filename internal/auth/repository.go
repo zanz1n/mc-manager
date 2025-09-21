@@ -5,14 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/dto"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 )
 
 type Respository struct {
@@ -46,20 +45,18 @@ func (a authedServer) IsAdmin() bool {
 	return true
 }
 
-func (r *Respository) Authenticate(ctx context.Context) (Authed, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok || md == nil {
-		return nil, ErrInvalidAuthToken
-	}
-
-	ttype, token, err := getMeta(md)
+func (r *Respository) Authenticate(
+	ctx context.Context,
+	reqHead, resHead http.Header,
+) (Authed, error) {
+	ttype, token, err := getMeta(reqHead)
 	if err != nil {
 		return nil, err
 	}
 
 	switch ttype {
 	case "Bearer":
-		authed, err := r.authUser(ctx, token, md)
+		authed, err := r.authUser(ctx, token, reqHead, resHead)
 		if err != nil {
 			return nil, err
 		}
@@ -76,20 +73,18 @@ func (r *Respository) Authenticate(ctx context.Context) (Authed, error) {
 	}
 }
 
-func (r *Respository) AuthenticateUser(ctx context.Context) (Token, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok || md == nil {
-		return Token{}, ErrInvalidAuthToken
-	}
-
-	ttype, token, err := getMeta(md)
+func (r *Respository) AuthenticateUser(
+	ctx context.Context,
+	reqHead, resHead http.Header,
+) (Token, error) {
+	ttype, token, err := getMeta(reqHead)
 	if err != nil {
 		return Token{}, err
 	}
 
 	switch ttype {
 	case "Bearer":
-		return r.authUser(ctx, token, md)
+		return r.authUser(ctx, token, reqHead, resHead)
 
 	case "Server", "SRV":
 		return Token{}, errors.Join(
@@ -128,14 +123,14 @@ func (r *Respository) authServer(
 func (r *Respository) authUser(
 	ctx context.Context,
 	tokenstr string,
-	md metadata.MD,
+	reqHead, resHead http.Header,
 ) (token Token, err error) {
 	token, err = r.a.DecodeToken(tokenstr)
 	if err == nil {
 		return
 	}
 
-	rthead := md.Get("auth-refresh-token")
+	rthead := reqHead.Values("auth-refresh-token")
 	if len(rthead) != 1 {
 		err = ErrInvalidAuthToken
 		return
@@ -160,21 +155,20 @@ func (r *Respository) authUser(
 		return
 	}
 
-	err = grpc.SendHeader(ctx, metadata.MD{
-		"set-token": []string{tokenstr},
-	})
+	resHead.Set("set-token", tokenstr)
+
 	return
 }
 
-func getMeta(md metadata.MD) (ttype string, t string, err error) {
-	h := md.Get("authorization")
+func getMeta(head http.Header) (ttype string, t string, err error) {
+	h := head.Values("authorization")
 	if len(h) != 1 {
 		return "", "", ErrInvalidAuthToken
 	}
 
 	var ok bool
 	ttype, t, ok = strings.Cut(h[0], " ")
-	if !ok || md == nil {
+	if !ok || head == nil {
 		return "", "", ErrInvalidAuthToken
 	}
 	return

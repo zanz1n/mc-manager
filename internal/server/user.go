@@ -5,22 +5,24 @@ import (
 	"database/sql"
 	"errors"
 
+	"connectrpc.com/connect"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/auth"
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
+	"github.com/zanz1n/mc-manager/internal/pb/pbconnect"
 	"golang.org/x/crypto/bcrypt"
 )
 
-var _ pb.UserServiceServer = (*UserServer)(nil)
+var _ pbconnect.UserServiceHandler = (*UserServer)(nil)
 
 type UserServer struct {
 	db         db.Querier
 	ar         *auth.Respository
 	bcryptCost int
 
-	pb.UnimplementedUserServiceServer
+	// pb.UnimplementedUserServiceServer
 }
 
 func NewUserServer(
@@ -35,14 +37,19 @@ func NewUserServer(
 	}
 }
 
-// GetById implements pb.UserServiceServer.
-func (s *UserServer) GetById(ctx context.Context, req *pb.Snowflake) (*pb.User, error) {
-	authed, err := s.ar.Authenticate(ctx)
+// GetById implements pbconnect.UserServiceHandler.
+func (s *UserServer) GetById(
+	ctx context.Context,
+	req *connect.Request[pb.Snowflake],
+) (*connect.Response[pb.User], error) {
+	res := connect.NewResponse((*pb.User)(nil))
+
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
 	if err != nil {
 		return nil, err
 	}
 
-	id := dto.Snowflake(req.Id)
+	id := dto.Snowflake(req.Msg.Id)
 
 	if !authed.IsAdmin() {
 		if id != authed.GetId() {
@@ -57,15 +64,19 @@ func (s *UserServer) GetById(ctx context.Context, req *pb.Snowflake) (*pb.User, 
 		}
 		return nil, err
 	}
-	return user.IntoPB(), nil
+
+	res.Msg = user.IntoPB()
+	return res, nil
 }
 
-// GetMany implements pb.UserServiceServer.
+// GetMany implements pbconnect.UserServiceHandler.
 func (s *UserServer) GetMany(
 	ctx context.Context,
-	req *pb.Pagination,
-) (*pb.UserGetManyResponse, error) {
-	authed, err := s.ar.Authenticate(ctx)
+	req *connect.Request[pb.Pagination],
+) (*connect.Response[pb.UserGetManyResponse], error) {
+	res := connect.NewResponse((*pb.UserGetManyResponse)(nil))
+
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +85,8 @@ func (s *UserServer) GetMany(
 		return nil, ErrPermissionDenied
 	}
 
-	lastSeen := dto.Snowflake(req.LastSeen)
-	users, err := s.db.UserGetMany(ctx, lastSeen, req.Limit)
+	lastSeen := dto.Snowflake(req.Msg.LastSeen)
+	users, err := s.db.UserGetMany(ctx, lastSeen, req.Msg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -85,14 +96,18 @@ func (s *UserServer) GetMany(
 		pbusers[i] = u.IntoPB()
 	}
 
-	return &pb.UserGetManyResponse{
-		Users: pbusers,
-	}, nil
+	res.Msg = &pb.UserGetManyResponse{Users: pbusers}
+	return res, nil
 }
 
-// Create implements pb.UserServiceServer.
-func (s *UserServer) Create(ctx context.Context, req *pb.UserCreateRequest) (*pb.User, error) {
-	authed, err := s.ar.Authenticate(ctx)
+// Create implements pbconnect.UserServiceHandler.
+func (s *UserServer) Create(
+	ctx context.Context,
+	req *connect.Request[pb.UserCreateRequest],
+) (*connect.Response[pb.User], error) {
+	res := connect.NewResponse((*pb.User)(nil))
+
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +117,7 @@ func (s *UserServer) Create(ctx context.Context, req *pb.UserCreateRequest) (*pb
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword(
-		[]byte(req.Password),
+		[]byte(req.Msg.Password),
 		s.bcryptCost,
 	)
 	if err != nil {
@@ -111,24 +126,31 @@ func (s *UserServer) Create(ctx context.Context, req *pb.UserCreateRequest) (*pb
 
 	user, err := s.db.UserCreate(ctx, db.UserCreateParams{
 		ID:            dto.NewSnowflake(),
-		Username:      req.Username,
-		FirstName:     req.FirstName,
-		LastName:      req.LastName,
-		MinecraftUser: req.MinecraftUser,
-		Email:         req.Email,
-		Admin:         req.Admin,
-		TwoFa:         req.TwoFa,
+		Username:      req.Msg.Username,
+		FirstName:     req.Msg.FirstName,
+		LastName:      req.Msg.LastName,
+		MinecraftUser: req.Msg.MinecraftUser,
+		Email:         req.Msg.Email,
+		Admin:         req.Msg.Admin,
+		TwoFa:         req.Msg.TwoFa,
 		Password:      hashed,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return user.IntoPB(), nil
+
+	res.Msg = user.IntoPB()
+	return res, nil
 }
 
-// Delete implements pb.UserServiceServer.
-func (s *UserServer) Delete(ctx context.Context, req *pb.Snowflake) (*pb.User, error) {
-	authed, err := s.ar.Authenticate(ctx)
+// Delete implements pbconnect.UserServiceHandler.
+func (s *UserServer) Delete(
+	ctx context.Context,
+	req *connect.Request[pb.Snowflake],
+) (*connect.Response[pb.User], error) {
+	res := connect.NewResponse((*pb.User)(nil))
+
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +159,7 @@ func (s *UserServer) Delete(ctx context.Context, req *pb.Snowflake) (*pb.User, e
 		return nil, ErrPermissionDenied
 	}
 
-	id := dto.Snowflake(req.Id)
+	id := dto.Snowflake(req.Msg.Id)
 	user, err := s.db.UserDelete(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -146,5 +168,6 @@ func (s *UserServer) Delete(ctx context.Context, req *pb.Snowflake) (*pb.User, e
 		return nil, err
 	}
 
-	return user.IntoPB(), nil
+	res.Msg = user.IntoPB()
+	return res, nil
 }

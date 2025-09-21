@@ -6,45 +6,45 @@ import (
 	"strconv"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/zanz1n/mc-manager/internal/distribution"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
+	"github.com/zanz1n/mc-manager/internal/pb/pbconnect"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-var _ pb.RunnerServiceServer = (*Server)(nil)
+var _ pbconnect.RunnerServiceHandler = (*Server)(nil)
 
 type Server struct {
 	m        *Manager
 	versions *distribution.Repository
-	pb.UnimplementedRunnerServiceServer
+	pbconnect.UnimplementedRunnerServiceHandler
 }
 
 func NewServer(m *Manager, v *distribution.Repository) *Server {
 	return &Server{m: m, versions: v}
 }
 
-// GetById implements pb.RunnerServiceServer.
+// GetById implements pbconnect.RunnerServiceHandler.
 func (s *Server) GetById(
 	ctx context.Context,
-	req *pb.Snowflake,
-) (*pb.RunningInstance, error) {
-	i, err := s.m.GetById(ctx, dto.Snowflake(req.Id))
+	req *connect.Request[pb.Snowflake],
+) (*connect.Response[pb.RunningInstance], error) {
+	i, err := s.m.GetById(ctx, dto.Snowflake(req.Msg.Id))
 	if err != nil {
 		return nil, err
 	}
 
-	return i.IntoPB(), nil
+	return connect.NewResponse(i.IntoPB()), nil
 }
 
-// GetStateById implements pb.RunnerServiceServer.
+// GetStateById implements pbconnect.RunnerServiceHandler.
 func (s *Server) GetStateById(
 	ctx context.Context,
-	req *pb.Snowflake,
-) (*pb.RunnerGetStateResponse, error) {
-	i, err := s.m.GetById(ctx, dto.Snowflake(req.Id))
+	req *connect.Request[pb.Snowflake],
+) (*connect.Response[pb.RunnerGetStateResponse], error) {
+	i, err := s.m.GetById(ctx, dto.Snowflake(req.Msg.Id))
 	if err != nil {
 		return nil, err
 	}
@@ -54,25 +54,25 @@ func (s *Server) GetStateById(
 		players = i.proxy.Players.Load()
 	}
 
-	return &pb.RunnerGetStateResponse{
+	return connect.NewResponse(&pb.RunnerGetStateResponse{
 		Players: players,
 		State:   i.GetState(),
-	}, nil
+	}), nil
 }
 
-// Launch implements pb.RunnerServiceServer.
+// Launch implements pbconnect.RunnerServiceHandler.
 func (s *Server) Launch(
 	ctx context.Context,
-	req *pb.RunnerLaunchRequest,
-) (*pb.RunningInstance, error) {
+	req *connect.Request[pb.RunnerLaunchRequest],
+) (*connect.Response[pb.RunningInstance], error) {
 	var (
 		version distribution.Version
 		err     error
 	)
-	if req.Version == "" {
-		version, err = s.versions.GetLatest(ctx, req.VersionDistro)
+	if req.Msg.Version == "" {
+		version, err = s.versions.GetLatest(ctx, req.Msg.VersionDistro)
 	} else {
-		version, err = s.versions.GetVersion(ctx, req.VersionDistro, req.Version)
+		version, err = s.versions.GetVersion(ctx, req.Msg.VersionDistro, req.Msg.Version)
 	}
 
 	if err != nil {
@@ -83,12 +83,12 @@ func (s *Server) Launch(
 		limits InstanceLimits
 		config InstanceConfig
 	)
-	limits.FromPB(req.Limits)
-	config.FromPB(req.Config)
+	limits.FromPB(req.Msg.Limits)
+	config.FromPB(req.Msg.Config)
 
 	i, err := s.m.Launch(ctx, InstanceCreateData{
-		ID:      dto.Snowflake(req.Id),
-		Name:    req.Name,
+		ID:      dto.Snowflake(req.Msg.Id),
+		Name:    req.Msg.Name,
 		Version: version,
 		Limits:  limits,
 		Config:  config,
@@ -97,55 +97,56 @@ func (s *Server) Launch(
 		return nil, err
 	}
 
-	return i.IntoPB(), nil
+	return connect.NewResponse(i.IntoPB()), nil
 }
 
-// Stop implements pb.RunnerServiceServer.
+// Stop implements pbconnect.RunnerServiceHandler.
 func (s *Server) Stop(
 	ctx context.Context,
-	req *pb.Snowflake,
-) (*pb.RunningInstance, error) {
-	i, err := s.m.GetById(ctx, dto.Snowflake(req.Id))
+	req *connect.Request[pb.Snowflake],
+) (*connect.Response[pb.RunningInstance], error) {
+	i, err := s.m.GetById(ctx, dto.Snowflake(req.Msg.Id))
 	if err != nil {
 		return nil, err
 	}
 
 	// TODO: timeout
-	err = s.m.Stop(ctx, dto.Snowflake(req.Id))
+	err = s.m.Stop(ctx, dto.Snowflake(req.Msg.Id))
 	if err != nil {
 		return nil, err
 	}
 
-	return i.IntoPB(), nil
+	return connect.NewResponse(i.IntoPB()), nil
 }
 
-// SendCommand implements pb.RunnerServiceServer.
+// SendCommand implements pbconnect.RunnerServiceHandler.
 func (s *Server) SendCommand(
 	ctx context.Context,
-	req *pb.RunnerSendCommandRequest,
-) (*emptypb.Empty, error) {
-	i, err := s.m.GetById(ctx, dto.Snowflake(req.InstanceId))
+	req *connect.Request[pb.RunnerSendCommandRequest],
+) (*connect.Response[emptypb.Empty], error) {
+	i, err := s.m.GetById(ctx, dto.Snowflake(req.Msg.InstanceId))
 	if err != nil {
 		return nil, err
 	}
 
-	if err = i.SendCommand(req.Command); err != nil {
+	if err = i.SendCommand(req.Msg.Command); err != nil {
 		return nil, err
 	}
-	return &emptypb.Empty{}, nil
+	return connect.NewResponse(&emptypb.Empty{}), nil
 }
 
-// Listen implements pb.RunnerServiceServer.
+// Listen implements pbconnect.RunnerServiceHandler.
 func (s *Server) Listen(
-	req *pb.RunnerListenRequest,
-	stream grpc.ServerStreamingServer[pb.Event],
+	ctx context.Context,
+	req *connect.Request[pb.RunnerListenRequest],
+	stream *connect.ServerStream[pb.Event],
 ) error {
-	i, err := s.m.GetById(stream.Context(), dto.Snowflake(req.InstanceId))
+	i, err := s.m.GetById(ctx, dto.Snowflake(req.Msg.InstanceId))
 	if err != nil {
 		return err
 	}
 
-	ch := i.AttachListener(req.IncludeLogs)
+	ch := i.AttachListener(req.Msg.IncludeLogs)
 	defer func() {
 		if !i.DetachListener(ch) {
 			slog.Error(
@@ -155,9 +156,10 @@ func (s *Server) Listen(
 		}
 	}()
 
-	md := metadata.MD{}
-	md.Set("X-Instance-Listeners", strconv.Itoa(i.ListenersCount()))
-	md.Set(
+	headers := stream.ResponseHeader()
+
+	headers.Set("X-Instance-Listeners", strconv.Itoa(i.ListenersCount()))
+	headers.Set(
 		"X-Instance-Uptime",
 		time.Since(i.LaunchedAt).Round(time.Second).String(),
 	)
@@ -166,9 +168,7 @@ func (s *Server) Listen(
 	if i.proxy != nil {
 		players = i.proxy.Players.Load()
 	}
-	md.Set("X-Instance-Players", strconv.Itoa(int(players)))
-
-	stream.SendHeader(md)
+	headers.Set("X-Instance-Players", strconv.Itoa(int(players)))
 
 	for {
 		ev, ok := <-ch
@@ -183,12 +183,13 @@ func (s *Server) Listen(
 	return nil
 }
 
-// ListenMany implements pb.RunnerServiceServer.
+// ListenMany implements pbconnect.RunnerServiceHandler.
 func (s *Server) ListenMany(
-	req *pb.RunnerListenManyRequest,
-	stream grpc.ServerStreamingServer[pb.RunnerListenManyResponse],
+	ctx context.Context,
+	req *connect.Request[pb.RunnerListenManyRequest],
+	stream *connect.ServerStream[pb.RunnerListenManyResponse],
 ) error {
-	instances, err := s.m.GetMany(stream.Context(), req.Instances)
+	instances, err := s.m.GetMany(ctx, req.Msg.Instances)
 	if err != nil {
 		return err
 	}
@@ -201,7 +202,7 @@ func (s *Server) ListenMany(
 	ch := make(chan evt, len(instances))
 
 	for _, i := range instances {
-		c := i.AttachListener(req.IncludeLogs)
+		c := i.AttachListener(req.Msg.IncludeLogs)
 		defer i.DetachListener(c)
 
 		go func() {
