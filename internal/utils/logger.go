@@ -28,14 +28,14 @@ func (l *loggerInterceptor) WrapUnary(handler connect.UnaryFunc) connect.UnaryFu
 			if ok {
 				slog.Info(
 					"GRPC: Handled unary call",
-					"method", req.HTTPMethod(),
+					"procedure", req.Spec().Procedure,
 					"code", s.Code(),
 					"took", took,
 				)
 			} else {
 				slog.Info(
 					"GRPC: Handled unary call with error",
-					"method", req.HTTPMethod(),
+					"procedure", req.Spec().Procedure,
 					"took", took,
 					"error", err,
 				)
@@ -44,7 +44,7 @@ func (l *loggerInterceptor) WrapUnary(handler connect.UnaryFunc) connect.UnaryFu
 		} else {
 			slog.Info(
 				"GRPC: Handled unary call",
-				"method", req.HTTPMethod(),
+				"procedure", req.Spec().Procedure,
 				"code", "ok",
 				"took", took,
 			)
@@ -79,7 +79,7 @@ func (l *loggerInterceptor) WrapStreamingHandler(
 			if ok {
 				slog.Info(
 					"GRPC: Handled stream call",
-					"method", spec.Procedure,
+					"procedure", spec.Procedure,
 					"stream_type", spec.StreamType,
 					"code", s.Code(),
 					"took", took,
@@ -87,7 +87,7 @@ func (l *loggerInterceptor) WrapStreamingHandler(
 			} else {
 				slog.Info(
 					"GRPC: Handled stream call with error",
-					"method", spec.Procedure,
+					"procedure", spec.Procedure,
 					"stream_type", spec.StreamType,
 					"took", took,
 					"error", err,
@@ -96,7 +96,7 @@ func (l *loggerInterceptor) WrapStreamingHandler(
 		} else {
 			slog.Info(
 				"GRPC: Handled stream call",
-				"method", spec.Procedure,
+				"procedure", spec.Procedure,
 				"stream_type", spec.StreamType,
 				"code", "ok",
 				"took", took,
