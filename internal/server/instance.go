@@ -14,6 +14,7 @@ import (
 	"github.com/zanz1n/mc-manager/internal/pb"
 	"github.com/zanz1n/mc-manager/internal/pb/pbconnect"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var _ pbconnect.InstanceServiceHandler = (*InstanceServer)(nil)
@@ -75,29 +76,189 @@ func (s *InstanceServer) GetById(
 	return res, nil
 }
 
-// // GetMany implements pbconnect.InstanceServiceHandler.
-// func (s *InstanceServer) GetMany(
-// 	ctx context.Context,
-// 	req *connect.Request[pb.Pagination],
-// ) (*connect.Response[pb.InstanceGetManyResponse], error) {
-// 	panic("unimplemented")
-// }
+// GetMany implements pbconnect.InstanceServiceHandler.
+func (s *InstanceServer) GetMany(
+	ctx context.Context,
+	req *connect.Request[pb.Pagination],
+) (*connect.Response[pb.InstanceGetManyResponse], error) {
+	res := connect.NewResponse((*pb.InstanceGetManyResponse)(nil))
 
-// // GetByUser implements pbconnect.InstanceServiceHandler.
-// func (s *InstanceServer) GetByUser(
-// 	ctx context.Context,
-// 	req *connect.Request[pb.InstanceGetByUserRequest],
-// ) (*connect.Response[pb.InstanceGetManyResponse], error) {
-// 	panic("unimplemented")
-// }
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
+	if err != nil {
+		return nil, err
+	}
 
-// // GetByNode implements pbconnect.InstanceServiceHandler.
-// func (s *InstanceServer) GetByNode(
-// 	ctx context.Context,
-// 	req *connect.Request[pb.InstanceGetByNodeRequest],
-// ) (*connect.Response[pb.InstanceGetManyResponse], error) {
-// 	panic("unimplemented")
-// }
+	if !authed.IsAdmin() {
+		return nil, ErrPermissionDenied
+	}
+	lastSeen := dto.Snowflake(req.Msg.LastSeen)
+
+	instances, err := s.db.InstanceGetMany(ctx, lastSeen, req.Msg.Limit)
+	if err != nil {
+		return nil, err
+	}
+
+	pbinstances := make([]*pb.PartialInstance, len(instances))
+	for i, instance := range instances {
+		lastLaunched := (*timestamppb.Timestamp)(nil)
+		if instance.LastLaunched.Valid {
+			lastLaunched = timestamppb.New(instance.LastLaunched.Time)
+		}
+
+		pbi := &pb.PartialInstance{
+			Id:            uint64(instance.ID),
+			UserId:        uint64(instance.UserID),
+			NodeId:        uint64(instance.NodeID),
+			CreatedAt:     timestamppb.New(instance.CreatedAt),
+			UpdatedAt:     timestamppb.New(instance.UpdatedAt),
+			LastLaunched:  lastLaunched,
+			State:         pb.InstanceState_STATE_OFFLINE,
+			Players:       0,
+			Name:          instance.Name,
+			Version:       instance.Version,
+			VersionDistro: instance.VersionDistro,
+			Maintenance:   instance.Maintenance,
+		}
+
+		s.loadInstanceState(ctx, pbi)
+		pbinstances[i] = pbi
+	}
+
+	res.Msg = &pb.InstanceGetManyResponse{Instances: pbinstances}
+	return res, nil
+}
+
+// GetByUser implements pbconnect.InstanceServiceHandler.
+func (s *InstanceServer) GetByUser(
+	ctx context.Context,
+	req *connect.Request[pb.InstanceGetByUserRequest],
+) (*connect.Response[pb.InstanceGetManyResponse], error) {
+	res := connect.NewResponse((*pb.InstanceGetManyResponse)(nil))
+
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
+	if err != nil {
+		return nil, err
+	}
+
+	if !authed.IsAdmin() {
+		if uint64(authed.GetId()) != req.Msg.UserId {
+			return nil, ErrPermissionDenied
+		}
+	}
+
+	instances, err := s.db.InstanceGetByUser(ctx,
+		dto.Snowflake(req.Msg.UserId),
+		dto.Snowflake(req.Msg.Pagination.LastSeen),
+		req.Msg.Pagination.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	pbinstances := make([]*pb.PartialInstance, len(instances))
+	for i, instance := range instances {
+		lastLaunched := (*timestamppb.Timestamp)(nil)
+		if instance.LastLaunched.Valid {
+			lastLaunched = timestamppb.New(instance.LastLaunched.Time)
+		}
+
+		pbi := &pb.PartialInstance{
+			Id:            uint64(instance.ID),
+			UserId:        uint64(instance.UserID),
+			NodeId:        uint64(instance.NodeID),
+			CreatedAt:     timestamppb.New(instance.CreatedAt),
+			UpdatedAt:     timestamppb.New(instance.UpdatedAt),
+			LastLaunched:  lastLaunched,
+			State:         pb.InstanceState_STATE_OFFLINE,
+			Players:       0,
+			Name:          instance.Name,
+			Version:       instance.Version,
+			VersionDistro: instance.VersionDistro,
+			Maintenance:   instance.Maintenance,
+		}
+
+		s.loadInstanceState(ctx, pbi)
+		pbinstances[i] = pbi
+	}
+
+	res.Msg = &pb.InstanceGetManyResponse{Instances: pbinstances}
+	return res, nil
+}
+
+// GetByNode implements pbconnect.InstanceServiceHandler.
+func (s *InstanceServer) GetByNode(
+	ctx context.Context,
+	req *connect.Request[pb.InstanceGetByNodeRequest],
+) (*connect.Response[pb.InstanceGetManyResponse], error) {
+	res := connect.NewResponse((*pb.InstanceGetManyResponse)(nil))
+
+	authed, err := s.ar.Authenticate(ctx, req.Header(), res.Header())
+	if err != nil {
+		return nil, err
+	}
+
+	if !authed.IsAdmin() {
+		return nil, ErrPermissionDenied
+	}
+
+	instances, err := s.db.InstanceGetByNode(ctx,
+		dto.Snowflake(req.Msg.NodeId),
+		dto.Snowflake(req.Msg.Pagination.LastSeen),
+		req.Msg.Pagination.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	pbinstances := make([]*pb.PartialInstance, len(instances))
+	for i, instance := range instances {
+		lastLaunched := (*timestamppb.Timestamp)(nil)
+		if instance.LastLaunched.Valid {
+			lastLaunched = timestamppb.New(instance.LastLaunched.Time)
+		}
+
+		pbi := &pb.PartialInstance{
+			Id:            uint64(instance.ID),
+			UserId:        uint64(instance.UserID),
+			NodeId:        uint64(instance.NodeID),
+			CreatedAt:     timestamppb.New(instance.CreatedAt),
+			UpdatedAt:     timestamppb.New(instance.UpdatedAt),
+			LastLaunched:  lastLaunched,
+			State:         pb.InstanceState_STATE_OFFLINE,
+			Players:       0,
+			Name:          instance.Name,
+			Version:       instance.Version,
+			VersionDistro: instance.VersionDistro,
+			Maintenance:   instance.Maintenance,
+		}
+
+		s.loadInstanceState(ctx, pbi)
+		pbinstances[i] = pbi
+	}
+
+	res.Msg = &pb.InstanceGetManyResponse{Instances: pbinstances}
+	return res, nil
+}
+
+func (s *InstanceServer) loadInstanceState(ctx context.Context, i *pb.PartialInstance) error {
+	runner, err := s.r.Get(ctx, dto.Snowflake(i.Id))
+	if err != nil {
+		return err
+	}
+
+	ri, err := runner.GetStateById(
+		ctx,
+		connect.NewRequest(&pb.Snowflake{Id: i.Id}),
+	)
+	if err != nil {
+		return err
+	}
+
+	i.State = ri.Msg.State
+	i.Players = ri.Msg.Players
+
+	return nil
+}
 
 // Launch implements pbconnect.InstanceServiceHandler.
 func (s *InstanceServer) Launch(
