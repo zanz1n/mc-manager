@@ -4,7 +4,6 @@ import { createConnectTransport } from '@connectrpc/connect-web';
 import type { User } from '@pb/user_pb';
 import { AppError } from './error';
 import { goto } from '$app/navigation';
-import { error } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 
 export class UnauthorizedError extends AppError {
@@ -26,10 +25,8 @@ export type SignupData = {
 	password: string;
 };
 
-type FetchFunc = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-
 export class Auther {
-	private static __instance: Auther | null = null;
+	private static __instance?: Auther;
 
 	static getInstance(): Auther {
 		if (!this.__instance) {
@@ -38,20 +35,19 @@ export class Auther {
 		return this.__instance;
 	}
 
-	private token: { jwt: string; refresh: string } | null = null;
+	private token?: { jwt: string; refresh: string };
 	private client: Client<typeof AuthService>;
 
-	constructor(
-		client?: Client<typeof AuthService>,
-		private _fetch: FetchFunc = fetch
-	) {
+	constructor(client?: Client<typeof AuthService>) {
 		const refresh = localStorage.getItem('refresh-token');
 		if (refresh) {
 			this.token = { refresh: refresh, jwt: 'replace' };
 		}
 
 		if (!client) {
-			const transport = createConnectTransport({ baseUrl: '/api' });
+			const transport = createConnectTransport({
+				baseUrl: 'http://localhost:8080/api'
+			});
 			client = createClient(AuthService, transport);
 		}
 		this.client = client;
@@ -59,7 +55,7 @@ export class Auther {
 
 	async getUser(): Promise<User> {
 		if (!this.token) {
-			error(400, 'Fodeu');
+			throw new UnauthorizedError();
 		}
 
 		const onHeader = (headers: Headers) => {
@@ -73,7 +69,7 @@ export class Auther {
 			{},
 			{
 				headers: {
-					authorization: this.token.jwt,
+					authorization: 'Bearer ' + this.token.jwt,
 					'auth-refresh-token': this.token.refresh
 				},
 				onHeader
@@ -102,14 +98,12 @@ export class Auther {
 			throw new UnauthorizedError();
 		}
 
-		const res = await this._fetch(input, {
-			...init,
-			headers: {
-				...init?.headers,
-				authorization: this.token.jwt,
-				'auth-refresh-token': this.token.refresh
-			}
-		});
+		if (isHeaders(init?.headers)) {
+			init.headers.set('authorization', 'Bearer ' + this.token.jwt);
+			init.headers.set('auth-refresh-token', this.token.refresh);
+		}
+
+		const res = await fetch(input, init);
 
 		const newToken = res.headers.get('set-token');
 		if (newToken) {
@@ -118,4 +112,15 @@ export class Auther {
 
 		return res;
 	}
+}
+
+function isHeaders(obj: unknown): obj is Headers {
+	return (
+		!!obj &&
+		typeof obj == 'object' &&
+		'append' in obj &&
+		typeof obj['append'] == 'function' &&
+		'set' in obj &&
+		typeof obj['set'] == 'function'
+	);
 }

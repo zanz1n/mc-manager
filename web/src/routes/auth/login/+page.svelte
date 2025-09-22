@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Auther } from '@lib/auth';
 
@@ -17,6 +18,7 @@
 
 		try {
 			await Auther.getInstance().login(email, password);
+			await goto(resolve('/'));
 		} catch (err) {
 			if (err instanceof Error) {
 				error = err.message;
