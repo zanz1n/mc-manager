@@ -45,9 +45,7 @@ export class Auther {
 		}
 
 		if (!client) {
-			const transport = createConnectTransport({
-				baseUrl: 'http://localhost:8080/api'
-			});
+			const transport = createConnectTransport({ baseUrl: '/api' });
 			client = createClient(AuthService, transport);
 		}
 		this.client = client;
