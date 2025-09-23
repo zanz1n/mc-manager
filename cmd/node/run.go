@@ -20,7 +20,7 @@ import (
 	"github.com/zanz1n/mc-manager/internal/utils"
 )
 
-func Run(ctx context.Context, cfg *config.RunnerConfig) {
+func Run(ctx context.Context, cfg *config.NodeConfig) {
 	start := time.Now()
 	docker, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
@@ -72,7 +72,7 @@ func Run(ctx context.Context, cfg *config.RunnerConfig) {
 
 func Serve(
 	ctx context.Context,
-	cfg *config.RunnerConfig,
+	cfg *config.NodeConfig,
 	distributions *distribution.Repository,
 	manager *runner.Manager,
 ) {

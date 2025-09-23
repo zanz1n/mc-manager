@@ -1,17 +1,17 @@
 package config
 
-type RunnerConfig struct {
+type NodeConfig struct {
 	Server ServerConfig `json:"server" yaml:"server"`
 	Docker DockerConfig `json:"docker" yaml:"docker"`
 	Data   DataConfig   `json:"data" yaml:"data"`
 }
 
-func WriteRunnerConfig(name string, cfg *RunnerConfig) (err error) {
+func WriteRunnerConfig(name string, cfg *NodeConfig) (err error) {
 	return writeCfg(name, cfg)
 }
 
-func GetRunnerConfig(name string) (*RunnerConfig, error) {
-	var cfg RunnerConfig
+func GetRunnerConfig(name string) (*NodeConfig, error) {
+	var cfg NodeConfig
 	err := getCfg(name, &cfg)
 	return &cfg, err
 }
