@@ -108,52 +108,66 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 		localNodeId = cfg.LocalNode.ID
 	}
 
-	loggerInterceptor := utils.NewLoggerInterceptor()
-	errorInterceptor := utils.NewErrorInterceptor()
+	interceptors := connect.WithInterceptors(
+		utils.NewLoggerInterceptor(),
+		utils.NewErrorInterceptor(),
+		validator,
+	)
 
-	r := chi.NewRouter()
-	r.Use(cors.AllowAll().Handler)
-	r.Use(middleware.CleanPath)
+	grpcR := chi.NewRouter()
 
-	r.Mount("/", fileHandler(webstatic.Build))
+	if !cfg.Standalone {
+		grpcR.Use(stripPrefix("/api"))
+	} else {
+		grpcR.Use(cors.AllowAll().Handler)
+		grpcR.Use(middleware.CleanPath)
+	}
+	grpcR.NotFound(http.NotFound)
 
-	r.Route("/api", func(r chi.Router) {
-		r.Use(stripPrefix("/api"))
-		r.NotFound(http.NotFound)
+	grpcR.Mount(pbconnect.NewAuthServiceHandler(
+		server.NewAuthServer(querier, auther, authRepo, cfg),
+		interceptors,
+	))
+	grpcR.Mount(pbconnect.NewUserServiceHandler(
+		server.NewUserServer(querier, authRepo, cfg),
+		interceptors,
+	))
+	grpcR.Mount(pbconnect.NewNodeServiceHandler(
+		server.NewNodeServer(querier, authRepo, localNodeId),
+		interceptors,
+	))
+	grpcR.Mount(pbconnect.NewInstanceServiceHandler(
+		server.NewInstanceServer(querier, authRepo, runners),
+		interceptors,
+	))
+	grpcR.Mount(pbconnect.NewDistributionServiceHandler(
+		distribution.NewServer(distroRepo),
+		interceptors,
+	))
 
-		r.Mount(pbconnect.NewAuthServiceHandler(
-			server.NewAuthServer(querier, auther, authRepo, cfg),
-			connect.WithInterceptors(loggerInterceptor, errorInterceptor, validator),
-		))
-		r.Mount(pbconnect.NewUserServiceHandler(
-			server.NewUserServer(querier, authRepo, cfg),
-			connect.WithInterceptors(loggerInterceptor, errorInterceptor, validator),
-		))
-		r.Mount(pbconnect.NewNodeServiceHandler(
-			server.NewNodeServer(querier, authRepo, localNodeId),
-			connect.WithInterceptors(loggerInterceptor, errorInterceptor, validator),
-		))
-		r.Mount(pbconnect.NewInstanceServiceHandler(
-			server.NewInstanceServer(querier, authRepo, runners),
-			connect.WithInterceptors(loggerInterceptor, errorInterceptor, validator),
-		))
-		r.Mount(pbconnect.NewDistributionServiceHandler(
-			distribution.NewServer(distroRepo),
-			connect.WithInterceptors(loggerInterceptor, errorInterceptor, validator),
-		))
+	if cfg.Server.EnableReflection {
+		reflector := grpcreflect.NewStaticReflector(
+			"manager.AuthService",
+			"manager.UserService",
+			"manager.NodeService",
+			"manager.InstanceService",
+			"manager.DistributionService",
+		)
+		grpcR.Mount(grpcreflect.NewHandlerV1(reflector, interceptors))
+		grpcR.Mount(grpcreflect.NewHandlerV1Alpha(reflector, interceptors))
+	}
 
-		if cfg.Server.EnableReflection {
-			reflector := grpcreflect.NewStaticReflector(
-				"manager.AuthService",
-				"manager.UserService",
-				"manager.NodeService",
-				"manager.InstanceService",
-				"manager.DistributionService",
-			)
-			r.Mount(grpcreflect.NewHandlerV1(reflector))
-			r.Mount(grpcreflect.NewHandlerV1Alpha(reflector))
-		}
-	})
+	var r *chi.Mux
+	if !cfg.Standalone {
+		r = chi.NewRouter()
+		r.Use(cors.AllowAll().Handler)
+		r.Use(middleware.CleanPath)
+
+		r.Mount("/", fileHandler(webstatic.Build))
+		r.Mount("/api", grpcR)
+	} else {
+		r = grpcR
+	}
 
 	if err = utils.Serve(ctx, cfg.Server, r); err != nil {
 		log.Fatalln(err)

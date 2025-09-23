@@ -65,20 +65,23 @@ func Run(ctx context.Context, cfg *config.NodeConfig) {
 		panic(err)
 	}
 
-	loggerInterceptor := utils.NewLoggerInterceptor()
-	errorInterceptor := utils.NewErrorInterceptor()
+	interceptors := connect.WithInterceptors(
+		utils.NewLoggerInterceptor(),
+		utils.NewErrorInterceptor(),
+		validator,
+	)
 
 	mux := http.NewServeMux()
 
 	mux.Handle(pbconnect.NewRunnerServiceHandler(
 		runner.NewServer(manager, distributions),
-		connect.WithInterceptors(loggerInterceptor, errorInterceptor, validator),
+		interceptors,
 	))
 
 	if cfg.Server.EnableReflection {
 		reflector := grpcreflect.NewStaticReflector("manager.RunnerService")
-		mux.Handle(grpcreflect.NewHandlerV1(reflector))
-		mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
+		mux.Handle(grpcreflect.NewHandlerV1(reflector, interceptors))
+		mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector, interceptors))
 	}
 
 	if err = utils.Serve(ctx, cfg.Server, mux); err != nil {

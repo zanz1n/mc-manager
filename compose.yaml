@@ -2,6 +2,7 @@ configs:
   api-config:
     content: |
       name: ""
+      standalone: false
 
       server:
         ip: 0.0.0.0

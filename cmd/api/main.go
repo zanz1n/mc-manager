@@ -23,6 +23,11 @@ var (
 		false,
 		"executes migrations automatically",
 	)
+	standaloneOpt = flag.Bool(
+		"standalone",
+		false,
+		"runs only the grpc api without frontend",
+	)
 )
 
 func init() {
@@ -55,6 +60,10 @@ func main() {
 
 	if *migrateOpt {
 		cfg.DB.Migrate = true
+	}
+
+	if *standaloneOpt {
+		cfg.Standalone = true
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
