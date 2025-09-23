@@ -8,7 +8,6 @@ import (
 	"log"
 	"log/slog"
 	"mime"
-	"net"
 	"net/http"
 	"path"
 	"strings"
@@ -22,7 +21,6 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/auth"
-	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/distribution"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
@@ -87,14 +85,8 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 	authRepo := auth.NewRepository(auther, querier, cfg)
 
 	distroRepo := distribution.NewRepository()
-	distroRepo.AddDistribution(
-		pb.Distribution_PAPER,
-		distribution.NewPaper(nil),
-	)
-	distroRepo.AddDistribution(
-		pb.Distribution_VANILLA,
-		distribution.NewVanilla(nil),
-	)
+	distroRepo.AddDistribution(pb.Distribution_PAPER, distribution.NewPaper(nil))
+	distroRepo.AddDistribution(pb.Distribution_VANILLA, distribution.NewVanilla(nil))
 
 	runners := server.NewRunners(querier, nil)
 
@@ -105,42 +97,6 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 		}
 		runners.AddRunner(cfg.LocalNode.ID, r)
 	}
-
-	Serve(
-		ctx,
-		cfg,
-		querier,
-		auther,
-		authRepo,
-		distroRepo,
-		runners,
-	)
-}
-
-func Serve(
-	ctx context.Context,
-	cfg *config.APIConfig,
-	querier db.Querier,
-	auther auth.Auther,
-	authRepo *auth.Respository,
-	distroRepo *distribution.Repository,
-	runners *server.Runners,
-) {
-	start := time.Now()
-
-	ln, err := net.ListenTCP("tcp", &net.TCPAddr{
-		IP:   cfg.Server.IP,
-		Port: int(cfg.Server.Port),
-	})
-	if err != nil {
-		log.Fatalln("Failed to listen tcp:", err)
-	}
-
-	slog.Info(
-		"GRPC: Listening",
-		"addr", ln.Addr(),
-		"took", time.Since(start).Round(time.Microsecond),
-	)
 
 	validator, err := validate.NewInterceptor()
 	if err != nil {
@@ -199,38 +155,8 @@ func Serve(
 		}
 	})
 
-	protocols := new(http.Protocols)
-	protocols.SetHTTP1(true)
-	protocols.SetUnencryptedHTTP2(true)
-
-	s := &http.Server{
-		Addr:      ln.Addr().String(),
-		Handler:   r,
-		Protocols: protocols,
-		BaseContext: func(l net.Listener) context.Context {
-			return ctx
-		},
-	}
-
-	go func() {
-		<-ctx.Done()
-
-		shutdownStart := time.Now()
-
-		stopctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-
-		err := s.Shutdown(stopctx)
-		slog.Info(
-			"GRPC: Closed server",
-			"took", time.Since(shutdownStart).Round(time.Millisecond),
-			"online_for", time.Since(start).Round(time.Second),
-			"error", err,
-		)
-	}()
-
-	if err = s.Serve(ln); err != nil {
-		log.Fatalln("Failed to grpc serve:", err)
+	if err = utils.Serve(ctx, cfg.Server, r); err != nil {
+		log.Fatalln(err)
 	}
 }
 

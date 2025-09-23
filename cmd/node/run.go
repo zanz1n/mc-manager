@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"log/slog"
-	"net"
 	"net/http"
 	"time"
 
@@ -44,14 +43,8 @@ func Run(ctx context.Context, cfg *config.NodeConfig) {
 	)
 
 	distributions := distribution.NewRepository()
-	distributions.AddDistribution(
-		pb.Distribution_VANILLA,
-		distribution.NewVanilla(nil),
-	)
-	distributions.AddDistribution(
-		pb.Distribution_PAPER,
-		distribution.NewPaper(nil),
-	)
+	distributions.AddDistribution(pb.Distribution_VANILLA, distribution.NewVanilla(nil))
+	distributions.AddDistribution(pb.Distribution_PAPER, distribution.NewPaper(nil))
 
 	runtime, err := runner.NewDockerRuntime(
 		context.Background(),
@@ -66,30 +59,6 @@ func Run(ctx context.Context, cfg *config.NodeConfig) {
 	}
 
 	manager := runner.NewManager(runtime)
-
-	Serve(ctx, cfg, distributions, manager)
-}
-
-func Serve(
-	ctx context.Context,
-	cfg *config.NodeConfig,
-	distributions *distribution.Repository,
-	manager *runner.Manager,
-) {
-	start := time.Now()
-	ln, err := net.ListenTCP("tcp", &net.TCPAddr{
-		IP:   cfg.Server.IP,
-		Port: int(cfg.Server.Port),
-	})
-	if err != nil {
-		log.Fatalln("Failed to listen tcp:", err)
-	}
-
-	slog.Info(
-		"GRPC: Listening",
-		"addr", ln.Addr(),
-		"took", time.Since(start).Round(time.Microsecond),
-	)
 
 	validator, err := validate.NewInterceptor()
 	if err != nil {
@@ -112,37 +81,7 @@ func Serve(
 		mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
 	}
 
-	protocols := new(http.Protocols)
-	protocols.SetHTTP1(true)
-	protocols.SetUnencryptedHTTP2(true)
-
-	s := &http.Server{
-		Addr:      ln.Addr().String(),
-		Handler:   mux,
-		Protocols: protocols,
-		BaseContext: func(l net.Listener) context.Context {
-			return ctx
-		},
-	}
-
-	go func() {
-		<-ctx.Done()
-
-		shutdownStart := time.Now()
-
-		stopctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-
-		err := s.Shutdown(stopctx)
-		slog.Info(
-			"GRPC: Closed server",
-			"took", time.Since(shutdownStart).Round(time.Millisecond),
-			"online_for", time.Since(start).Round(time.Second),
-			"error", err,
-		)
-	}()
-
-	if err = s.Serve(ln); err != nil {
-		log.Fatalln("Failed to grpc serve:", err)
+	if err = utils.Serve(ctx, cfg.Server, mux); err != nil {
+		log.Fatalln(err)
 	}
 }

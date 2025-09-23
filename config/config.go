@@ -10,6 +10,15 @@ type ServerConfig struct {
 	Port             uint16 `json:"port" yaml:"port" validate:"required"`
 	Password         string `json:"password" yaml:"password"`
 	EnableReflection bool   `json:"enable_reflection" yaml:"enable-reflection"`
+
+	TLS *ServerTLSConfig `json:"tls" yaml:"tls"`
+}
+
+type ServerTLSConfig struct {
+	Enable       bool   `json:"enable" yaml:"enable"`
+	AutoGenerate bool   `json:"auto_generate" yaml:"auto-generate"`
+	Certificate  string `json:"cert" yaml:"cert"`
+	Key          string `json:"key" yaml:"key"`
 }
 
 type DockerConfig struct {

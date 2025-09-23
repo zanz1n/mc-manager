@@ -144,7 +144,7 @@ func marshalKeyFile(name string, key any, private bool) (err error) {
 	}
 
 	err = pem.Encode(file, &pem.Block{
-		Type:  fmt.Sprintf("BEGIN %s KEY", mode),
+		Type:  mode + " " + "KEY",
 		Bytes: data,
 	})
 	return
