@@ -23,7 +23,8 @@ configs:
         skip-preparation: false
         migrate: true
 
-      redis:
+      cache:
+        type: redis
         url: redis://redis:6379
 
       runner:
@@ -39,7 +40,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: api.dockerfile
+      dockerfile: docker/api.dockerfile
     command: ["--config", "/api-config.yaml"]
     ports:
       - 8080:8080
