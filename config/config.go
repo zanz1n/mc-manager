@@ -46,6 +46,8 @@ type DBConfig struct {
 	Migrate         bool   `json:"migrate" yaml:"migrate"`
 }
 
-type RedisConfig struct {
-	URL string `json:"url" yaml:"url" validate:"url"`
+type CacheConfig struct {
+	Type         string        `json:"type" yaml:"type"`
+	URL          string        `json:"url" yaml:"url"`
+	SaveInterval time.Duration `json:"save_interval" yaml:"save-interval"`
 }

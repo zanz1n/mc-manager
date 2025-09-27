@@ -8,7 +8,7 @@ type APIConfig struct {
 	Server     ServerConfig `json:"server" yaml:"server"`
 	Auth       AuthConfig   `json:"auth" yaml:"auth"`
 	DB         DBConfig     `json:"db" yaml:"db"`
-	Redis      RedisConfig  `json:"redis" yaml:"redis"`
+	Cache      CacheConfig  `json:"redis" yaml:"redis"`
 
 	LocalNode *APILocalNodeConfig `json:"runner" yaml:"runner"`
 }
