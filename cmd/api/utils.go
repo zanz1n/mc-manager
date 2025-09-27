@@ -20,8 +20,21 @@ import (
 	sqlembed "github.com/zanz1n/mc-manager/sql"
 )
 
-func openKV(ctx context.Context, cfg *config.APIConfig) (kv.KVStorer, error) {
-	opt, err := valkey.ParseURL(cfg.Redis.URL)
+func openKV(_ context.Context, cfg *config.APIConfig) (kv.KVStorer, error) {
+	switch cfg.Cache.Type {
+	case "redis", "valkey":
+		return openKVRedis(cfg.Cache)
+
+	case "local":
+		return openKVLocal(cfg.Cache)
+
+	default:
+		return openKVLocal(cfg.Cache)
+	}
+}
+
+func openKVRedis(cfg config.CacheConfig) (kv.KVStorer, error) {
+	opt, err := valkey.ParseURL(cfg.URL)
 	if err != nil {
 		return nil, err
 	}
@@ -32,6 +45,10 @@ func openKV(ctx context.Context, cfg *config.APIConfig) (kv.KVStorer, error) {
 	}
 
 	return kv.NewRedisKV(cli), nil
+}
+
+func openKVLocal(cfg config.CacheConfig) (kv.KVStorer, error) {
+	return kv.NewLocalKV(cfg.URL, cfg.SaveInterval), nil
 }
 
 func openDB(ctx context.Context, cfg *config.APIConfig) (db.Querier, *sql.DB, error) {
