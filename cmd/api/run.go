@@ -37,7 +37,7 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 	}
 
 	start := time.Now()
-	querier, sqldb, err := openDB(ctx, cfg)
+	querier, sqldb, err := openDB(ctx, cfg.DB)
 	if err != nil {
 		log.Fatalln("Failed to connect to database:", err)
 	}
@@ -100,11 +100,6 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 		runners.AddRunner(cfg.LocalNode.ID, r)
 	}
 
-	validator, err := validate.NewInterceptor()
-	if err != nil {
-		panic(err)
-	}
-
 	var localNodeId dto.Snowflake
 	if cfg.LocalNode != nil {
 		localNodeId = cfg.LocalNode.ID
@@ -113,7 +108,7 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 	interceptors := connect.WithInterceptors(
 		utils.NewLoggerInterceptor(),
 		utils.NewErrorInterceptor(),
-		validator,
+		validate.NewInterceptor(),
 	)
 
 	grpcR := chi.NewRouter()

@@ -2,14 +2,17 @@ package main
 
 import (
 	"context"
+	"database/sql/driver"
 	"flag"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/dto"
+	"modernc.org/sqlite"
 )
 
 var (
@@ -66,6 +69,12 @@ func main() {
 		cfg.Standalone = true
 	}
 
+	if cfg.DB.DBKind() == "sqlite" {
+		cfg.DB.SkipPreparation = false
+		cfg.DB.Migrate = true
+		setupSqlite()
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		sig := <-endCh
@@ -74,4 +83,14 @@ func main() {
 	}()
 
 	Run(ctx, cfg)
+}
+
+func setupSqlite() {
+	sqlite.MustRegisterFunction("now", &sqlite.FunctionImpl{
+		NArgs:         0,
+		Deterministic: false,
+		Scalar: func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+			return time.Now().UnixMilli(), nil
+		},
+	})
 }

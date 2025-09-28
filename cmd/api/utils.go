@@ -18,6 +18,7 @@ import (
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/kv"
 	sqlembed "github.com/zanz1n/mc-manager/sql"
+	_ "modernc.org/sqlite"
 )
 
 func openKV(_ context.Context, cfg *config.APIConfig) (kv.KVStorer, error) {
@@ -51,27 +52,29 @@ func openKVLocal(cfg config.CacheConfig) (kv.KVStorer, error) {
 	return kv.NewLocalKV(cfg.URL, cfg.SaveInterval), nil
 }
 
-func openDB(ctx context.Context, cfg *config.APIConfig) (*db.Queries, *sql.DB, error) {
-	sqldb, err := sql.Open("pgx/v5", cfg.DB.URL)
+func openDB(ctx context.Context, cfg config.DBConfig) (*db.Queries, *sql.DB, error) {
+	sqldb, err := sql.Open(cfg.DriverName(), cfg.ConnString())
 	if err != nil {
 		return nil, nil, err
 	}
-	sqldb.SetMaxOpenConns(cfg.DB.MaxConns)
+	if cfg.DBKind() != "sqlite" {
+		sqldb.SetMaxOpenConns(cfg.MaxConns)
+	}
 
-	if !cfg.DB.SkipPreparation {
+	if !cfg.SkipPreparation {
 		if err = sqldb.PingContext(ctx); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	if cfg.DB.Migrate {
-		if err = migrate(ctx, sqldb); err != nil {
+	if cfg.Migrate {
+		if err = migrate(ctx, cfg, sqldb); err != nil {
 			return nil, nil, fmt.Errorf("migrate: %w", err)
 		}
 	}
 
 	var q *db.Queries
-	if !cfg.DB.SkipPreparation {
+	if !cfg.SkipPreparation {
 		if q, err = db.Prepare(ctx, sqldb); err != nil {
 			return nil, nil, err
 		}
@@ -167,17 +170,17 @@ func marshalKeyFile(name string, key any, private bool) (err error) {
 	return
 }
 
-func migrate(ctx context.Context, db *sql.DB) error {
+func migrate(ctx context.Context, cfg config.DBConfig, db *sql.DB) error {
 	logger := slog.NewLogLogger(slog.Default().Handler(), slog.LevelInfo)
 	logger.SetPrefix("Database: ")
 
 	goose.SetLogger(logger)
 
-	if err := goose.SetDialect("postgres"); err != nil {
+	if err := goose.SetDialect(cfg.DBKind()); err != nil {
 		return err
 	}
 	goose.SetBaseFS(sqlembed.Migrations)
 	goose.SetSequential(true)
 
-	return goose.UpContext(ctx, db, "migrations")
+	return goose.UpContext(ctx, db, "migrations/"+cfg.DBKind())
 }

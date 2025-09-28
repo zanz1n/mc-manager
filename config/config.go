@@ -2,6 +2,7 @@ package config
 
 import (
 	"net"
+	"strings"
 	"time"
 )
 
@@ -40,10 +41,55 @@ type AuthConfig struct {
 }
 
 type DBConfig struct {
-	URL             string `json:"url" yaml:"url" validate:"url"`
+	Type            string `json:"type" yaml:"type"`
+	URL             string `json:"url" yaml:"url"`
 	MaxConns        int    `json:"max_conns" yaml:"max-conns"`
 	SkipPreparation bool   `json:"skip_preparation" yaml:"skip-preparation"`
 	Migrate         bool   `json:"migrate" yaml:"migrate"`
+
+	kind   string
+	driver string
+}
+
+func (c *DBConfig) DBKind() string {
+	if c.kind != "" {
+		return c.kind
+	}
+
+	switch c.Type {
+	case "postgres", "postgresql", "pg", "pgx", "pgx/v5":
+		c.kind = "postgres"
+
+	case "", "sqlite3", "local", "sqlite", "file", "fs":
+		c.kind = "sqlite"
+	}
+
+	return c.kind
+}
+
+func (c *DBConfig) DriverName() string {
+	if c.driver != "" {
+		return c.driver
+	}
+
+	switch c.DBKind() {
+	case "postgres":
+		c.driver = "pgx/v5"
+
+	case "sqlite":
+		c.driver = "sqlite"
+	}
+
+	return c.driver
+}
+
+func (c *DBConfig) ConnString() string {
+	if c.DriverName() == "sqlite" {
+		if !strings.HasPrefix(c.URL, "file:") {
+			return "file:" + c.URL + "?_time_integer_format=unix_milli&_inttotime=true"
+		}
+	}
+	return c.URL
 }
 
 type CacheConfig struct {

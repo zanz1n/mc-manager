@@ -60,15 +60,10 @@ func Run(ctx context.Context, cfg *config.NodeConfig) {
 
 	manager := runner.NewManager(runtime)
 
-	validator, err := validate.NewInterceptor()
-	if err != nil {
-		panic(err)
-	}
-
 	interceptors := connect.WithInterceptors(
 		utils.NewLoggerInterceptor(),
 		utils.NewErrorInterceptor(),
-		validator,
+		validate.NewInterceptor(),
 	)
 
 	mux := http.NewServeMux()
