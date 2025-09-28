@@ -18,6 +18,7 @@ configs:
         public-key: /etc/mc/jwt-pub.pem
 
       db:
+        type: postgres
         url: postgres://postgres:docker@postgres:5432/mc
         max-conns: 10
         skip-preparation: false
