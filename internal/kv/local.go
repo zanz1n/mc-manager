@@ -16,19 +16,19 @@ import (
 
 var _ KVStorer = (*LocalKV)(nil)
 
-type localValue struct {
-	object     any
-	expiration int64
+type LocalValue struct {
+	Object     any
+	Expiration int64
 }
 
-func newLocalValue(obj any, exp time.Duration) localValue {
-	return localValue{
-		object:     obj,
-		expiration: time.Now().Add(exp).UnixMilli(),
+func newLocalValue(obj any, exp time.Duration) LocalValue {
+	return LocalValue{
+		Object:     obj,
+		Expiration: time.Now().Add(exp).UnixMilli(),
 	}
 }
 
-func (v *localValue) assignTo(to any) bool {
+func (v *LocalValue) assignTo(to any) bool {
 	toValue := reflect.ValueOf(to)
 	if toValue.Kind() != reflect.Pointer {
 		return false
@@ -39,7 +39,7 @@ func (v *localValue) assignTo(to any) bool {
 		return false
 	}
 
-	fromValue := reflect.ValueOf(v.object)
+	fromValue := reflect.ValueOf(v.Object)
 	if fromValue.Kind() == reflect.Pointer {
 		fromValue = fromValue.Elem()
 	}
@@ -52,8 +52,8 @@ func (v *localValue) assignTo(to any) bool {
 	return true
 }
 
-func (v *localValue) String() string {
-	if str, ok := v.object.(string); ok {
+func (v *LocalValue) String() string {
+	if str, ok := v.Object.(string); ok {
 		return str
 	}
 
@@ -64,28 +64,30 @@ func (v *localValue) String() string {
 	return utils.UnsafeString(b)
 }
 
-func (v *localValue) isExpired() bool {
-	if v.expiration <= 0 {
+func (v *LocalValue) isExpired() bool {
+	if v.Expiration <= 0 {
 		return false
 	}
 
-	return time.Now().UnixMilli() > v.expiration
+	return time.Now().UnixMilli() > v.Expiration
 }
 
 type LocalKV struct {
-	m  map[string]localValue
+	m  map[string]LocalValue
 	mu sync.RWMutex
 
 	fileName string
-	closeCh  chan struct{}
+	closeIC  chan struct{}
+	closeFB  chan struct{}
 }
 
 func NewLocalKV(fileName string, saveInterval time.Duration) *LocalKV {
 	kv := &LocalKV{
-		m:        make(map[string]localValue),
+		m:        make(map[string]LocalValue),
 		mu:       sync.RWMutex{},
 		fileName: fileName,
-		closeCh:  make(chan struct{}),
+		closeIC:  make(chan struct{}),
+		closeFB:  make(chan struct{}),
 	}
 
 	if fileName != "" {
@@ -99,7 +101,7 @@ func NewLocalKV(fileName string, saveInterval time.Duration) *LocalKV {
 		}
 
 		if saveInterval > 0 {
-			kv.launchBackground(saveInterval)
+			go kv.launchBackground(saveInterval)
 		}
 	}
 
@@ -128,8 +130,8 @@ func (l *LocalKV) launchBackground(interval time.Duration) {
 				)
 			}
 
-		case <-l.closeCh:
-			l.closeCh <- struct{}{}
+		case <-l.closeIC:
+			l.closeFB <- struct{}{}
 			return
 		}
 	}
@@ -147,7 +149,7 @@ func (l *LocalKV) DumpTo(fpath string) error {
 
 	now := time.Now().UnixMilli()
 	for k, v := range l.m {
-		if now > v.expiration {
+		if now > v.Expiration {
 			delete(l.m, k)
 		}
 	}
@@ -174,48 +176,48 @@ func (l *LocalKV) LoadFrom(fpath string) error {
 
 	now := time.Now().UnixMilli()
 	for k, v := range l.m {
-		if now > v.expiration {
+		if now > v.Expiration {
 			delete(l.m, k)
 		}
 	}
 	return nil
 }
 
-func (l *LocalKV) get(key string) (localValue, error) {
+func (l *LocalKV) get(key string) (LocalValue, error) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
 	v, ok := l.m[key]
 	if !ok {
-		return localValue{}, ErrValueNotFound
+		return LocalValue{}, ErrValueNotFound
 	}
 
 	if v.isExpired() {
-		return localValue{}, ErrValueNotFound
+		return LocalValue{}, ErrValueNotFound
 	}
 
 	return v, nil
 }
 
-func (l *LocalKV) getEx(key string, ttl time.Duration) (localValue, error) {
+func (l *LocalKV) getEx(key string, ttl time.Duration) (LocalValue, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	v, ok := l.m[key]
 	if !ok {
-		return localValue{}, ErrValueNotFound
+		return LocalValue{}, ErrValueNotFound
 	}
 
 	if v.isExpired() {
-		return localValue{}, ErrValueNotFound
+		return LocalValue{}, ErrValueNotFound
 	}
 
-	newV := newLocalValue(v.object, ttl)
+	newV := newLocalValue(v.Object, ttl)
 	l.m[key] = newV
 	return newV, nil
 }
 
-func (l *LocalKV) set(key string, value localValue) {
+func (l *LocalKV) set(key string, value LocalValue) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -343,8 +345,8 @@ func (l *LocalKV) Delete(ctx context.Context, key string) error {
 // Close implements KVStorer.
 func (l *LocalKV) Close() error {
 	if l.fileName != "" {
-		l.closeCh <- struct{}{}
-		<-l.closeCh
+		l.closeIC <- struct{}{}
+		<-l.closeFB
 
 		return l.DumpTo(l.fileName)
 	}

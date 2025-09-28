@@ -51,7 +51,7 @@ func openKVLocal(cfg config.CacheConfig) (kv.KVStorer, error) {
 	return kv.NewLocalKV(cfg.URL, cfg.SaveInterval), nil
 }
 
-func openDB(ctx context.Context, cfg *config.APIConfig) (db.Querier, *sql.DB, error) {
+func openDB(ctx context.Context, cfg *config.APIConfig) (*db.Queries, *sql.DB, error) {
 	sqldb, err := sql.Open("pgx/v5", cfg.DB.URL)
 	if err != nil {
 		return nil, nil, err
@@ -70,7 +70,7 @@ func openDB(ctx context.Context, cfg *config.APIConfig) (db.Querier, *sql.DB, er
 		}
 	}
 
-	var q db.Querier
+	var q *db.Queries
 	if !cfg.DB.SkipPreparation {
 		if q, err = db.Prepare(ctx, sqldb); err != nil {
 			return nil, nil, err

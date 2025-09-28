@@ -43,7 +43,9 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 	}
 	defer func() {
 		start := time.Now()
+		querier.Close()
 		err := sqldb.Close()
+
 		slog.Info(
 			"DB: Closed client",
 			"error", err,
