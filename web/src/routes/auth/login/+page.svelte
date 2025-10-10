@@ -2,12 +2,17 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Auther } from '@lib/auth';
+	import { toaster } from '@lib/svelte-toaster';
 
 	let error = $state<string>();
 
 	let email = $state('');
 	let password = $state('');
 </script>
+
+<svelte:head>
+	<title>Login</title>
+</svelte:head>
 
 <h1 class="text-3xl">Login</h1>
 
@@ -18,6 +23,7 @@
 
 		try {
 			await Auther.getInstance().login(email, password);
+			toaster.success({ title: 'Logged in' });
 			await goto(resolve('/'));
 		} catch (err) {
 			if (err instanceof Error) {

@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Auther } from '@lib/auth';
+	import { toaster } from '@lib/svelte-toaster';
 
 	let error = $state<string>();
 
@@ -12,6 +13,10 @@
 	let minecraftUser = $state('');
 	let password = $state('');
 </script>
+
+<svelte:head>
+	<title>Singup</title>
+</svelte:head>
 
 <h1 class="text-3xl">Signup</h1>
 
@@ -29,6 +34,7 @@
 				minecraftUser,
 				password
 			});
+			toaster.success({ title: 'Logged in' });
 			await goto(resolve('/'));
 		} catch (err) {
 			if (err instanceof Error) {
