@@ -6,8 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
-	"net/http/httptest"
+	"net/netip"
 	"time"
 
 	"github.com/docker/docker/client"
@@ -73,14 +74,36 @@ func RunLocalNode(
 		return nil, fmt.Errorf("create docker runner: %w", err)
 	}
 
+	ln, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
+	if err != nil {
+		return nil, err
+	}
+
+	addr, err := netip.ParseAddrPort(ln.Addr().String())
+	if err != nil {
+		panic(err)
+	}
+
 	manager := runner.NewManager(runtime)
 	runnerServer := runner.NewServer(manager, distros)
 
 	mux := http.NewServeMux()
 	mux.Handle(pbconnect.NewRunnerServiceHandler(runnerServer))
 
-	server := httptest.NewServer(mux)
-	client := pbconnect.NewRunnerServiceClient(server.Client(), "http://example.com")
+	httpsrv := http.Server{
+		Addr:    ln.Addr().String(),
+		Handler: mux,
+		BaseContext: func(l net.Listener) context.Context {
+			return ctx
+		},
+	}
+
+	client := pbconnect.NewRunnerServiceClient(
+		http.DefaultClient,
+		fmt.Sprintf("http://127.0.0.1:%d", addr.Port()),
+	)
+
+	go httpsrv.Serve(ln)
 
 	slog.Info(
 		"LocalNode: Running local node",
