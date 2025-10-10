@@ -2,20 +2,20 @@
 SELECT * FROM instances WHERE id = $1;
 
 -- name: InstanceGetMany :many
-SELECT id, user_id, node_id, created_at, updated_at, last_launched, name, description, version, version_distro, maintenance FROM instances
+SELECT * FROM instances
 WHERE id < sqlc.arg(last_seen)
 ORDER BY id DESC
 LIMIT sqlc.arg(lim);
 
 -- name: InstanceGetByUser :many
-SELECT id, user_id, node_id, created_at, updated_at, last_launched, name, description, version, version_distro, maintenance FROM instances
+SELECT * FROM instances
 WHERE user_id = sqlc.arg(user_id)
 AND id < sqlc.arg(last_seen)
 ORDER BY id DESC
 LIMIT sqlc.arg(lim);
 
 -- name: InstanceGetByNode :many
-SELECT id, user_id, node_id, created_at, updated_at, last_launched, name, description, version, version_distro, maintenance FROM instances
+SELECT * FROM instances
 WHERE node_id = sqlc.arg(node_id)
 AND id < sqlc.arg(last_seen)
 ORDER BY id DESC

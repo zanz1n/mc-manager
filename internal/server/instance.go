@@ -10,11 +10,11 @@ import (
 	"connectrpc.com/connect"
 	"github.com/zanz1n/mc-manager/internal/auth"
 	"github.com/zanz1n/mc-manager/internal/db"
+	"github.com/zanz1n/mc-manager/internal/distribution"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
 	"github.com/zanz1n/mc-manager/internal/pb/pbconnect"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var _ pbconnect.InstanceServiceHandler = (*InstanceServer)(nil)
@@ -22,15 +22,22 @@ var _ pbconnect.InstanceServiceHandler = (*InstanceServer)(nil)
 type InstanceServer struct {
 	db db.Querier
 	ar *auth.Respository
+	dr *distribution.Repository
 	r  *Runners
 
 	pbconnect.UnimplementedInstanceServiceHandler
 }
 
-func NewInstanceServer(db db.Querier, ar *auth.Respository, r *Runners) *InstanceServer {
+func NewInstanceServer(
+	db db.Querier,
+	ar *auth.Respository,
+	dr *distribution.Repository,
+	r *Runners,
+) *InstanceServer {
 	return &InstanceServer{
 		db: db,
 		ar: ar,
+		dr: dr,
 		r:  r,
 	}
 }
@@ -98,28 +105,9 @@ func (s *InstanceServer) GetMany(
 		return nil, err
 	}
 
-	pbinstances := make([]*pb.PartialInstance, len(instances))
+	pbinstances := make([]*pb.Instance, len(instances))
 	for i, instance := range instances {
-		lastLaunched := (*timestamppb.Timestamp)(nil)
-		if instance.LastLaunched.Valid {
-			lastLaunched = timestamppb.New(instance.LastLaunched.Time)
-		}
-
-		pbi := &pb.PartialInstance{
-			Id:            uint64(instance.ID),
-			UserId:        uint64(instance.UserID),
-			NodeId:        uint64(instance.NodeID),
-			CreatedAt:     timestamppb.New(instance.CreatedAt),
-			UpdatedAt:     timestamppb.New(instance.UpdatedAt),
-			LastLaunched:  lastLaunched,
-			State:         pb.InstanceState_STATE_OFFLINE,
-			Players:       0,
-			Name:          instance.Name,
-			Version:       instance.Version,
-			VersionDistro: instance.VersionDistro,
-			Maintenance:   instance.Maintenance,
-		}
-
+		pbi := instance.IntoPB(pb.InstanceState_STATE_OFFLINE, 0)
 		s.loadInstanceState(ctx, pbi)
 		pbinstances[i] = pbi
 	}
@@ -155,28 +143,9 @@ func (s *InstanceServer) GetByUser(
 		return nil, err
 	}
 
-	pbinstances := make([]*pb.PartialInstance, len(instances))
+	pbinstances := make([]*pb.Instance, len(instances))
 	for i, instance := range instances {
-		lastLaunched := (*timestamppb.Timestamp)(nil)
-		if instance.LastLaunched.Valid {
-			lastLaunched = timestamppb.New(instance.LastLaunched.Time)
-		}
-
-		pbi := &pb.PartialInstance{
-			Id:            uint64(instance.ID),
-			UserId:        uint64(instance.UserID),
-			NodeId:        uint64(instance.NodeID),
-			CreatedAt:     timestamppb.New(instance.CreatedAt),
-			UpdatedAt:     timestamppb.New(instance.UpdatedAt),
-			LastLaunched:  lastLaunched,
-			State:         pb.InstanceState_STATE_OFFLINE,
-			Players:       0,
-			Name:          instance.Name,
-			Version:       instance.Version,
-			VersionDistro: instance.VersionDistro,
-			Maintenance:   instance.Maintenance,
-		}
-
+		pbi := instance.IntoPB(pb.InstanceState_STATE_OFFLINE, 0)
 		s.loadInstanceState(ctx, pbi)
 		pbinstances[i] = pbi
 	}
@@ -210,28 +179,9 @@ func (s *InstanceServer) GetByNode(
 		return nil, err
 	}
 
-	pbinstances := make([]*pb.PartialInstance, len(instances))
+	pbinstances := make([]*pb.Instance, len(instances))
 	for i, instance := range instances {
-		lastLaunched := (*timestamppb.Timestamp)(nil)
-		if instance.LastLaunched.Valid {
-			lastLaunched = timestamppb.New(instance.LastLaunched.Time)
-		}
-
-		pbi := &pb.PartialInstance{
-			Id:            uint64(instance.ID),
-			UserId:        uint64(instance.UserID),
-			NodeId:        uint64(instance.NodeID),
-			CreatedAt:     timestamppb.New(instance.CreatedAt),
-			UpdatedAt:     timestamppb.New(instance.UpdatedAt),
-			LastLaunched:  lastLaunched,
-			State:         pb.InstanceState_STATE_OFFLINE,
-			Players:       0,
-			Name:          instance.Name,
-			Version:       instance.Version,
-			VersionDistro: instance.VersionDistro,
-			Maintenance:   instance.Maintenance,
-		}
-
+		pbi := instance.IntoPB(pb.InstanceState_STATE_OFFLINE, 0)
 		s.loadInstanceState(ctx, pbi)
 		pbinstances[i] = pbi
 	}
@@ -240,7 +190,7 @@ func (s *InstanceServer) GetByNode(
 	return res, nil
 }
 
-func (s *InstanceServer) loadInstanceState(ctx context.Context, i *pb.PartialInstance) error {
+func (s *InstanceServer) loadInstanceState(ctx context.Context, i *pb.Instance) error {
 	runner, err := s.r.Get(ctx, dto.Snowflake(i.Id))
 	if err != nil {
 		return err
@@ -367,6 +317,18 @@ func (s *InstanceServer) Create(
 	if !authed.IsAdmin() {
 		return nil, ErrPermissionDenied
 	}
+
+	var version distribution.Version
+	switch req.Msg.Version {
+	case "latest", "newest", "":
+		version, err = s.dr.GetLatest(ctx, req.Msg.VersionDistro)
+	default:
+		version, err = s.dr.GetVersion(ctx, req.Msg.VersionDistro, req.Msg.Version)
+	}
+
+	if err != nil {
+		return nil, err
+	}
 	id := dto.NewSnowflake()
 
 	i, err := s.db.InstanceCreate(ctx, db.InstanceCreateParams{
@@ -375,8 +337,8 @@ func (s *InstanceServer) Create(
 		NodeID:        dto.Snowflake(req.Msg.NodeId),
 		Name:          req.Msg.Name,
 		Description:   req.Msg.Description,
-		Version:       req.Msg.Version,
-		VersionDistro: req.Msg.VersionDistro,
+		Version:       version.ID,
+		VersionDistro: version.Distribution,
 		Config:        req.Msg.Config,
 		Limits:        req.Msg.Limits,
 	})

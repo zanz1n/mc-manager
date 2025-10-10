@@ -99,24 +99,8 @@ message Instance {
   InstanceLimits limits = 15;
 }
 
-message PartialInstance {
-  fixed64 id = 1;
-  fixed64 user_id = 2;
-  fixed64 node_id = 3;
-  google.protobuf.Timestamp created_at = 4;
-  google.protobuf.Timestamp updated_at = 5;
-  // nullable
-  google.protobuf.Timestamp last_launched = 6;
-  InstanceState state = 7;
-  int32 players = 8;
-  string name = 9;
-  string version = 10;
-  Distribution version_distro = 11;
-  bool maintenance = 12;
-}
-
 message InstanceGetManyResponse {
-  repeated PartialInstance instances = 1;
+  repeated Instance instances = 1;
 }
 
 message InstanceGetByUserRequest {

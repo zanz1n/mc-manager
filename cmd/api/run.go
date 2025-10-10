@@ -134,7 +134,7 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 		interceptors,
 	))
 	grpcR.Mount(pbconnect.NewInstanceServiceHandler(
-		server.NewInstanceServer(querier, authRepo, runners),
+		server.NewInstanceServer(querier, authRepo, distroRepo, runners),
 		interceptors,
 	))
 	grpcR.Mount(pbconnect.NewDistributionServiceHandler(
