@@ -1,8 +1,29 @@
 <!doctype html>
-<html lang="en" data-theme="mona" class="dark">
+<html lang="en" data-theme="concord" class="dark">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<script>
+			const storedMode = localStorage.getItem('theme-mode');
+			let isDark = true;
+			if (!storedMode) {
+				isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+			} else {
+				isDark = storedMode == 'dark';
+			}
+
+			if (isDark) {
+				document.documentElement.classList.remove('light');
+				if (!document.documentElement.classList.contains('dark')) {
+					document.documentElement.classList.add('dark');
+				}
+			} else {
+				document.documentElement.classList.remove('dark');
+				if (!document.documentElement.classList.contains('light')) {
+					document.documentElement.classList.add('light');
+				}
+			}
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

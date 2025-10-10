@@ -3,13 +3,14 @@
 
 @import '@skeletonlabs/skeleton';
 @import '@skeletonlabs/skeleton/optional/presets';
-@import '@skeletonlabs/skeleton/themes/mona';
+@import '@skeletonlabs/skeleton/themes/concord';
+@import '@skeletonlabs/skeleton/themes/terminus';
 
 @source '../node_modules/@skeletonlabs/skeleton-svelte/dist';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-body {
+:not([data-theme='concord']) body {
 	background-image:
 		radial-gradient(
 			at 24% 25%,
