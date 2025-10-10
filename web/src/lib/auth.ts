@@ -1,5 +1,5 @@
 import { AuthService } from '@pb/auth_pb';
-import { createClient, type Client } from '@connectrpc/connect';
+import { createClient, type Client, type Interceptor } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
 import type { User } from '@pb/user_pb';
 import { AppError } from './error';
@@ -57,7 +57,7 @@ export class Auther {
 		}
 
 		const onHeader = (headers: Headers) => {
-			const setTokenHead = headers.get('set-token');
+			const setTokenHead = headers.get('Set-Token');
 			if (setTokenHead && this.token) {
 				this.token.jwt = setTokenHead;
 			}
@@ -67,8 +67,8 @@ export class Auther {
 			{},
 			{
 				headers: {
-					authorization: 'Bearer ' + this.token.jwt,
-					'auth-refresh-token': this.token.refresh
+					Authorization: 'Bearer ' + this.token.jwt,
+					'Auth-Refresh-Token': this.token.refresh
 				},
 				onHeader
 			}
@@ -91,34 +91,26 @@ export class Auther {
 		localStorage.setItem('refresh-token', res.refreshToken);
 	}
 
-	async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-		if (!this.token) {
-			throw new UnauthorizedError();
-		}
-
-		if (isHeaders(init?.headers)) {
-			init.headers.set('authorization', 'Bearer ' + this.token.jwt);
-			init.headers.set('auth-refresh-token', this.token.refresh);
-		}
-
-		const res = await fetch(input, init);
-
-		const newToken = res.headers.get('set-token');
-		if (newToken) {
-			this.token.jwt = newToken;
-		}
-
-		return res;
+	logout() {
+		this.token = undefined;
 	}
-}
 
-function isHeaders(obj: unknown): obj is Headers {
-	return (
-		!!obj &&
-		typeof obj == 'object' &&
-		'append' in obj &&
-		typeof obj['append'] == 'function' &&
-		'set' in obj &&
-		typeof obj['set'] == 'function'
-	);
+	readonly interceptor: Interceptor = (fn) => {
+		return async (req) => {
+			if (!this.token) {
+				throw new UnauthorizedError();
+			}
+
+			req.header.set('Authorization', 'Bearer ' + this.token.jwt);
+			req.header.set('Auth-Refresh-Token', this.token.refresh);
+
+			const res = await fn(req);
+			const newToken = res.header.get('Set-Token');
+			if (newToken) {
+				this.token.jwt = newToken;
+			}
+
+			return res;
+		};
+	};
 }
