@@ -1,7 +1,11 @@
+x-defaults:
+  docker:
+    runtime_host: &docker-host /run/user/1000/podman/podman.sock
+
 configs:
   api-config:
     content: |
-      name: ""
+      name: "Manager"
       standalone: false
 
       server:
@@ -43,12 +47,16 @@ services:
       context: .
       dockerfile: docker/api.dockerfile
     command: ["--config", "/api-config.yaml"]
+    environment:
+      DOCKER_HOST: unix:///run/podman/podman.sock
     ports:
       - 8080:8080
     volumes:
       - ./data/data:/data
       - ./data/etc:/etc/mc
-      - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: *docker-host
+        target: /run/podman/podman.sock
     configs:
       - source: api-config
         target: /api-config.yaml
@@ -57,17 +65,17 @@ services:
       - redis
 
   postgres:
-    image: postgres:17-alpine
+    image: docker.io/library/postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: mc
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: docker
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql
 
   redis:
-    image: valkey/valkey:8-alpine
+    image: docker.io/valkey/valkey:alpine
     restart: unless-stopped
     command: ["--save", "60", "1"]
     volumes:
