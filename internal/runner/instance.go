@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/docker/docker/api/types"
+	"github.com/moby/moby/client"
 	"github.com/zanz1n/mc-manager/internal/distribution"
 	"github.com/zanz1n/mc-manager/internal/dto"
 	"github.com/zanz1n/mc-manager/internal/pb"
@@ -156,7 +156,7 @@ type Instance struct {
 
 	lnLogs map[chan<- Event]struct{}
 	ln     map[chan<- Event]struct{}
-	stream types.HijackedResponse
+	stream client.HijackedResponse
 	mu     sync.Mutex
 }
 
@@ -272,7 +272,7 @@ func (i *Instance) launch() {
 	go i.loadProxyServerData()
 }
 
-func (i *Instance) setStream(s types.HijackedResponse) {
+func (i *Instance) setStream(s client.HijackedResponse) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 

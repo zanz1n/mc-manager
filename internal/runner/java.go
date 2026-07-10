@@ -3,7 +3,7 @@ package runner
 import (
 	"fmt"
 
-	"github.com/docker/docker/api/types/strslice"
+	"github.com/moby/moby/api/types/strslice"
 	"github.com/zanz1n/mc-manager/internal/pb"
 )
 

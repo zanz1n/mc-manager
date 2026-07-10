@@ -10,7 +10,7 @@ import (
 	"connectrpc.com/connect"
 	"connectrpc.com/grpcreflect"
 	"connectrpc.com/validate"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/distribution"
 	"github.com/zanz1n/mc-manager/internal/pb"
@@ -21,7 +21,7 @@ import (
 
 func Run(ctx context.Context, cfg *config.NodeConfig) {
 	start := time.Now()
-	docker, err := client.NewClientWithOpts(client.FromEnv)
+	docker, err := client.New(client.FromEnv)
 	if err != nil {
 		log.Fatalln("Failed to connect to docker:", err)
 	}

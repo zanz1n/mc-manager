@@ -11,7 +11,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/distribution"
@@ -51,7 +51,7 @@ func RunLocalNode(
 
 	start := time.Now()
 
-	docker, err := client.NewClientWithOpts(client.FromEnv)
+	docker, err := client.New(client.FromEnv)
 	if err != nil {
 		return nil, fmt.Errorf("connect to docker: %w", err)
 	}

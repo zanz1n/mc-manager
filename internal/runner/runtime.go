@@ -13,11 +13,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/client"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/pb"
 	"github.com/zanz1n/mc-manager/internal/proxy"
@@ -73,11 +72,15 @@ func NewDockerRuntime(
 }
 
 func (r *dockerRuntime) createNetwork(ctx context.Context) error {
-	nw, err := r.docker.NetworkInspect(ctx, r.dockerNetwork, network.InspectOptions{})
+	nw, err := r.docker.NetworkInspect(ctx,
+		r.dockerNetwork,
+		client.NetworkInspectOptions{},
+	)
 	if err != nil {
-		nw, err := r.docker.NetworkCreate(ctx, r.dockerNetwork, network.CreateOptions{
-			Driver: "bridge",
-		})
+		nw, err := r.docker.NetworkCreate(ctx,
+			r.dockerNetwork,
+			client.NetworkCreateOptions{Driver: "bridge"},
+		)
 		if err != nil {
 			slog.Error(
 				"DockerRunner: Failed to create network",
@@ -98,7 +101,7 @@ func (r *dockerRuntime) createNetwork(ctx context.Context) error {
 		)
 		r.dockerNetworkId = nw.ID
 	} else {
-		nwid := nw.ID
+		nwid := nw.Network.ID
 		if len(nwid) > 12 {
 			nwid = nwid[0:12]
 		}
@@ -107,7 +110,7 @@ func (r *dockerRuntime) createNetwork(ctx context.Context) error {
 			"name", r.dockerNetwork,
 			"id", nwid,
 		)
-		r.dockerNetworkId = nw.ID
+		r.dockerNetworkId = nw.Network.ID
 	}
 
 	return nil
@@ -165,9 +168,9 @@ func (r *dockerRuntime) Create(ctx context.Context, instance *Instance) error {
 		jarName,
 		instance.Limits.RAM,
 	)
-
-	res, err := r.docker.ContainerCreate(ctx,
-		&container.Config{
+	opt := client.ContainerCreateOptions{
+		Name: containerName,
+		Config: &container.Config{
 			Image:        dockerImage,
 			AttachStdin:  true,
 			AttachStdout: true,
@@ -177,7 +180,7 @@ func (r *dockerRuntime) Create(ctx context.Context, instance *Instance) error {
 			WorkingDir:   "/game",
 			Cmd:          cmd,
 		},
-		&container.HostConfig{
+		HostConfig: &container.HostConfig{
 			AutoRemove: true,
 			Resources: container.Resources{
 				CPUPercent: int64(instance.Limits.CPU),
@@ -189,16 +192,16 @@ func (r *dockerRuntime) Create(ctx context.Context, instance *Instance) error {
 				Target: "/game",
 			}},
 		},
-		&network.NetworkingConfig{
+		NetworkingConfig: &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
 				r.dockerNetwork: {
 					NetworkID: r.dockerNetworkId,
 				},
 			},
 		},
-		nil,
-		containerName,
-	)
+	}
+
+	res, err := r.docker.ContainerCreate(ctx, opt)
 	if err != nil {
 		return errors.Join(ErrInstanceCreate, err)
 	}
@@ -215,17 +218,23 @@ func (r *dockerRuntime) Launch(ctx context.Context, instance *Instance) error {
 		)
 	}
 
-	err := r.docker.ContainerStart(ctx, instance.ContainerID, container.StartOptions{})
+	_, err := r.docker.ContainerStart(ctx,
+		instance.ContainerID,
+		client.ContainerStartOptions{},
+	)
 	if err != nil {
 		return errors.Join(ErrInstanceLaunch, err)
 	}
 
-	inspect, err := r.docker.ContainerInspect(ctx, instance.ContainerID)
+	inspect, err := r.docker.ContainerInspect(ctx,
+		instance.ContainerID,
+		client.ContainerInspectOptions{Size: false},
+	)
 	if err != nil {
 		return errors.Join(ErrInstanceLaunch, err)
 	}
 
-	nw, ok := inspect.NetworkSettings.Networks[r.dockerNetwork]
+	nw, ok := inspect.Container.NetworkSettings.Networks[r.dockerNetwork]
 	if !ok {
 		return errors.Join(
 			ErrInstanceLaunch,
@@ -237,7 +246,7 @@ func (r *dockerRuntime) Launch(ctx context.Context, instance *Instance) error {
 		instance.Limits.MaxPlayers,
 		instance.ID,
 		net.TCPAddr{
-			IP:   net.ParseIP(nw.IPAddress),
+			IP:   net.IP(nw.IPAddress.AsSlice()),
 			Port: int(instance.Config.Port),
 		},
 	)
@@ -247,17 +256,20 @@ func (r *dockerRuntime) Launch(ctx context.Context, instance *Instance) error {
 
 	instance.proxy = proxy
 
-	res, err := r.docker.ContainerAttach(ctx, instance.ContainerID, container.AttachOptions{
-		Stream: true,
-		Stdin:  true,
-		Stdout: true,
-		Stderr: true,
-	})
+	res, err := r.docker.ContainerAttach(ctx,
+		instance.ContainerID,
+		client.ContainerAttachOptions{
+			Stream: true,
+			Stdin:  true,
+			Stdout: true,
+			Stderr: true,
+		},
+	)
 	if err != nil {
 		return errors.Join(ErrInstanceLaunch, err)
 	}
 
-	instance.setStream(res)
+	instance.setStream(res.HijackedResponse)
 	instance.SetState(pb.InstanceState_STATE_STARTING)
 	instance.launch()
 
@@ -286,10 +298,13 @@ func (r *dockerRuntime) Stop(ctx context.Context, instance *Instance) error {
 
 	timeout := 20
 
-	err := r.docker.ContainerStop(ctx, instance.ContainerID, container.StopOptions{
-		Timeout: &timeout,
-		Signal:  "SIGINT",
-	})
+	_, err := r.docker.ContainerStop(ctx,
+		instance.ContainerID,
+		client.ContainerStopOptions{
+			Timeout: &timeout,
+			Signal:  "SIGINT",
+		},
+	)
 	if err != nil {
 		return errors.Join(ErrInstanceStop, err)
 	}
@@ -309,7 +324,10 @@ func (r *dockerRuntime) pullImage(v pb.JavaVersion) (string, error) {
 		return "", err
 	}
 
-	res, err := r.docker.ImagePull(context.Background(), ref, image.PullOptions{})
+	res, err := r.docker.ImagePull(context.Background(),
+		ref,
+		client.ImagePullOptions{},
+	)
 	if err != nil {
 		return "", errors.Join(ErrJavaVersion, err)
 	}
