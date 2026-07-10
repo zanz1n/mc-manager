@@ -4,7 +4,7 @@ modules:
   - path: "api/proto"
 
 deps:
-  - buf.build/bufbuild/protovalidate:v0.14.1
+  - buf.build/bufbuild/protovalidate:v1.2.0
 
 lint:
   use:
