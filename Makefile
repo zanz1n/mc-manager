@@ -90,7 +90,6 @@ deps:
 	$(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 	$(GO) install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 	$(GO) install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-	$(GO) install github.com/bufbuild/buf/cmd/buf@latest
 
 update: deps
 	$(GO) mod tidy
