@@ -68,16 +68,14 @@ func (c *DBConfig) DBKind() string {
 }
 
 func (c *DBConfig) DriverName() string {
-	if c.driver != "" {
-		return c.driver
-	}
+	if c.driver == "" {
+		switch c.DBKind() {
+		case "postgres":
+			c.driver = "pgx/v5"
 
-	switch c.DBKind() {
-	case "postgres":
-		c.driver = "pgx/v5"
-
-	case "sqlite":
-		c.driver = "sqlite"
+		case "sqlite":
+			c.driver = "sqlite3"
+		}
 	}
 
 	return c.driver

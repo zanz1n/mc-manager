@@ -37,7 +37,7 @@ func Run(ctx context.Context, cfg *config.APIConfig) {
 	}
 
 	start := time.Now()
-	querier, sqldb, err := openDB(ctx, cfg.DB)
+	querier, sqldb, err := openDB(ctx, &cfg.DB)
 	if err != nil {
 		log.Fatalln("Failed to connect to database:", err)
 	}

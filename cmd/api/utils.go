@@ -10,15 +10,17 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/ncruces/go-sqlite3"
+	"github.com/ncruces/go-sqlite3/driver"
 	"github.com/pressly/goose/v3"
 	"github.com/valkey-io/valkey-go"
 	"github.com/zanz1n/mc-manager/config"
 	"github.com/zanz1n/mc-manager/internal/db"
 	"github.com/zanz1n/mc-manager/internal/kv"
 	sqlembed "github.com/zanz1n/mc-manager/sql"
-	_ "modernc.org/sqlite"
 )
 
 func openKV(_ context.Context, cfg *config.APIConfig) (kv.KVStorer, error) {
@@ -52,8 +54,22 @@ func openKVLocal(cfg config.CacheConfig) (kv.KVStorer, error) {
 	return kv.NewLocalKV(cfg.URL, cfg.SaveInterval), nil
 }
 
-func openDB(ctx context.Context, cfg config.DBConfig) (*db.Queries, *sql.DB, error) {
-	sqldb, err := sql.Open(cfg.DriverName(), cfg.ConnString())
+func sqliteNow(ctx sqlite3.Context, arg ...sqlite3.Value) {
+	ctx.ResultTime(time.Now(), sqlite3.TimeFormat4)
+}
+
+func sqlOpen(cfg *config.DBConfig) (*sql.DB, error) {
+	if cfg.DBKind() == "sqlite" {
+		return driver.Open(cfg.ConnString(), func(c *sqlite3.Conn) error {
+			return c.CreateFunction("now", 0, sqlite3.INNOCUOUS, sqliteNow)
+		})
+	} else {
+		return sql.Open(cfg.DriverName(), cfg.ConnString())
+	}
+}
+
+func openDB(ctx context.Context, cfg *config.DBConfig) (*db.Queries, *sql.DB, error) {
+	sqldb, err := sqlOpen(cfg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -170,7 +186,7 @@ func marshalKeyFile(name string, key any, private bool) (err error) {
 	return
 }
 
-func migrate(ctx context.Context, cfg config.DBConfig, db *sql.DB) error {
+func migrate(ctx context.Context, cfg *config.DBConfig, db *sql.DB) error {
 	logger := slog.NewLogLogger(slog.Default().Handler(), slog.LevelInfo)
 	logger.SetPrefix("Database: ")
 
